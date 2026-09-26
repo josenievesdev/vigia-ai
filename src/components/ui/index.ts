@@ -2,6 +2,7 @@ export { AppText } from './AppText';
 export { Badge } from './Badge';
 export { Button } from './Button';
 export { Card } from './Card';
+export { Checkbox } from './Checkbox';
 export { EmptyState } from './EmptyState';
 export { ACTUATOR_ICONS, ALERT_ICONS, Icon, type IconName, SENSOR_ICONS, weatherIcon } from './Icon';
 export { KeyboardAwareScroll } from './KeyboardAwareScroll';

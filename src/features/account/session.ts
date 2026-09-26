@@ -1,25 +1,39 @@
 import { getSpeciesProfile } from '@/domain/profiles';
+import { loadRecords, syncPendingRecords } from '@/features/production/records';
 import { getSupabase, isBackendConfigured } from '@/lib/supabase';
 import { accessFor } from '@/services/account/access';
 import {
   AccountError,
+  acceptDataPolicy,
+  addZone,
   changePassword,
+  deleteZone,
   fetchFarmOf,
   fetchProfile,
   saveRemoteFarm,
   signInWithNationalId,
   toAccountError,
 } from '@/services/account/api';
-import { cacheAccount, cachedAccount, clearAccountCache } from '@/services/account/cache';
-import { subscriptionState } from '@/services/account/subscription';
-import type { Profile, RemoteFarm } from '@/services/account/types';
-import { type ConfigStore, startFarm, stopFarm } from '@/services/runtime';
-import { authActions, authStore } from '@/store/authStore';
+import {
+  activeZoneFor,
+  cacheAccount,
+  cachedAccount,
+  clearAccountCache,
+  rememberActiveZone,
+} from '@/services/account/cache';
+import { bogotaDate, subscriptionState } from '@/services/account/subscription';
+import type { NewZoneInput, Profile, RemoteFarm } from '@/services/account/types';
+import type { FarmConfig } from '@/services/config/farmConfig';
+import { applyFarmConfig, type ConfigStore, startFarm, stopFarm } from '@/services/runtime';
+import { authActions, authStore, type OpenFarm } from '@/store/authStore';
+import { farmStore } from '@/store/farmStore';
+import { recordsActions } from '@/store/recordsStore';
 
 /**
- * Sesión de VigíaAI: ingreso con cédula, cambio de la contraseña inicial, suscripción y qué
- * granja corre en la simulación (la del cliente desde Supabase o la demo guardada en el teléfono).
- * Las pantallas llaman estas funciones en sus manejadores; la navegación sigue sola al estado.
+ * Sesión de VigíaAI: ingreso con cédula, cambio de la contraseña inicial, autorización de datos,
+ * suscripción y qué granja corre en la simulación (la real desde Supabase, con su galpón activo, o
+ * la demo guardada en el teléfono). Las pantallas llaman estas funciones en sus manejadores; la
+ * navegación sigue sola al estado.
  */
 
 const speciesProfile = getSpeciesProfile('layingHens');
@@ -46,6 +60,28 @@ function withTimeout<T>(promise: Promise<T>, ms = NETWORK_TIMEOUT_MS): Promise<T
 const localSignOut = () =>
   isBackendConfigured() ? getSupabase().auth.signOut({ scope: 'local' }).catch(() => undefined) : Promise.resolve();
 
+function openFarmFrom(farm: RemoteFarm): OpenFarm {
+  return { farmId: farm.farmId, ownerId: farm.ownerId, zones: farm.zones, activeZoneId: farm.zoneId };
+}
+
+/** El resumen del galpón activo sigue a la configuración guardada (nombre, aves, lote). */
+function withConfig(farm: RemoteFarm, config: FarmConfig): RemoteFarm {
+  return {
+    ...farm,
+    config,
+    zones: farm.zones.map((z) =>
+      z.id === farm.zoneId
+        ? { ...z, name: config.zoneName, population: config.population, hatchDate: bogotaDate(config.hatchDate) }
+        : z,
+    ),
+  };
+}
+
+async function cacheIfOwn(farm: RemoteFarm): Promise<void> {
+  const { profile } = authStore.getState();
+  if (profile?.id === farm.ownerId) await cacheAccount(profile, farm);
+}
+
 /** Granja de Supabase como origen de la configuración: "Guardar" en Configuración escribe allá. */
 function remoteConfigStore(farm: RemoteFarm): ConfigStore {
   let current = farm;
@@ -53,18 +89,42 @@ function remoteConfigStore(farm: RemoteFarm): ConfigStore {
     load: async () => current.config,
     save: async (config) => {
       await saveRemoteFarm(getSupabase(), current, config);
-      current = { ...current, config };
-      const { profile } = authStore.getState();
-      if (profile?.id === current.ownerId) await cacheAccount(profile, current);
+      current = withConfig(current, config);
+      authActions.setFarm(openFarmFrom(current));
+      await cacheIfOwn(current);
     },
   };
 }
 
-/** Un cliente con la contraseña ya cambiada y al día necesita cargar su granja. */
+/** Pone en marcha una granja real: la simulación de su galpón activo y sus registros diarios. */
+async function openRemoteFarm(farm: RemoteFarm): Promise<void> {
+  authActions.setFarm(openFarmFrom(farm));
+  recordsActions.reset();
+  void rememberActiveZone(farm.ownerId, farm.zoneId);
+  void loadRecords();
+  await startFarm(remoteConfigStore(farm));
+}
+
+/** Granja demo del teléfono: "Ver demo", y administrador o instalador sin un cliente abierto. */
+async function openDemoFarm(): Promise<void> {
+  authActions.setFarm(null);
+  recordsActions.reset();
+  void loadRecords();
+  await startFarm();
+}
+
+function closeFarm(): void {
+  stopFarm();
+  authActions.setFarm(null);
+  recordsActions.reset();
+}
+
+/** Un cliente con la contraseña ya cambiada, la autorización dada y al día necesita su granja. */
 function needsFarm(profile: Profile): boolean {
   return (
     profile.role === 'client' &&
     !profile.mustChangePassword &&
+    profile.policyAccepted !== false &&
     subscriptionState(profile.paidUntil, Date.now()).status !== 'expired'
   );
 }
@@ -72,7 +132,10 @@ function needsFarm(profile: Profile): boolean {
 async function fetchAccountData(userId: string): Promise<{ profile: Profile | null; farm: RemoteFarm | null }> {
   const sb = getSupabase();
   const profile = await fetchProfile(sb, userId);
-  const farm = profile && needsFarm(profile) ? await fetchFarmOf(sb, profile.id, speciesProfile) : null;
+  const farm =
+    profile && needsFarm(profile)
+      ? await fetchFarmOf(sb, profile.id, speciesProfile, await activeZoneFor(profile.id))
+      : null;
   return { profile, farm };
 }
 
@@ -106,22 +169,22 @@ async function applyAccount(profile: Profile | null, farm: RemoteFarm | null, of
   if (!offline) await cacheAccount(profile, farm);
 
   if (accessFor(authStore.getState()) !== 'app') {
-    stopFarm(); // Falta cambiar la contraseña, o la suscripción está vencida.
+    closeFarm(); // Falta la contraseña propia o la autorización de datos, o la suscripción venció.
     return;
   }
   if (profile.role !== 'client') {
     // Administrador e instaladores empiezan en la granja demo; desde Clientes abren la de un cliente.
     authActions.setViewing(null);
-    await startFarm();
+    await openDemoFarm();
     return;
   }
   if (!farm) {
-    stopFarm();
+    closeFarm();
     await localSignOut();
     authActions.signedOut('Tu cuenta no tiene una granja asignada. Comunícate con tu instalador.');
     return;
   }
-  await startFarm(remoteConfigStore(farm));
+  await openRemoteFarm(farm);
 }
 
 /** Al abrir la app: recupera la sesión guardada en el teléfono, si la hay. */
@@ -136,7 +199,7 @@ export async function bootstrapSession(): Promise<void> {
     sb.auth.onAuthStateChange((event) => {
       // Sesión cerrada desde otro lugar, o vencida sin poder renovarse: volver al ingreso.
       if (event === 'SIGNED_OUT' && authStore.getState().status === 'signedIn') {
-        stopFarm();
+        closeFarm();
         authActions.signedOut('Tu sesión se cerró. Vuelve a ingresar.');
       }
     });
@@ -168,17 +231,29 @@ export async function signIn(nationalId: string, password: string): Promise<void
 }
 
 export async function signOut(): Promise<void> {
-  stopFarm();
+  closeFarm();
   authActions.signedOut();
   await clearAccountCache();
   await localSignOut();
 }
 
-/** Cambia la contraseña; si era la inicial, continúa con la carga de la cuenta. */
-export async function completePasswordChange(password: string): Promise<void> {
-  await changePassword(getSupabase(), password);
+/**
+ * Cambia la contraseña. En el primer ingreso también registra la autorización de datos (si se
+ * pide) y continúa con la carga de la cuenta.
+ */
+export async function completePasswordChange(password: string, acceptPolicy = false): Promise<void> {
+  const sb = getSupabase();
+  await changePassword(sb, password);
+  if (acceptPolicy) await acceptDataPolicy(sb);
   const { profile } = authStore.getState();
-  if (profile?.mustChangePassword) await loadAccount(profile.id);
+  if (profile && (profile.mustChangePassword || acceptPolicy)) await loadAccount(profile.id);
+}
+
+/** Autorización de tratamiento de datos (Ley 1581) y continuar. */
+export async function acceptPolicyAndContinue(): Promise<void> {
+  await acceptDataPolicy(getSupabase());
+  const { profile } = authStore.getState();
+  if (profile) await loadAccount(profile.id);
 }
 
 /** Vuelve a consultar la cuenta (por ejemplo, después de pagar). */
@@ -189,7 +264,8 @@ export async function refreshAccount(): Promise<void> {
 
 /**
  * Al volver la app a primer plano: si el instalador restableció la contraseña o cambió la
- * suscripción, la app se entera sin reiniciar. Sin conexión no hace nada.
+ * suscripción, la app se entera sin reiniciar; y se envían los registros pendientes. Sin conexión
+ * no hace nada.
  */
 export async function refreshProfileQuietly(): Promise<void> {
   const { status, profile, offline } = authStore.getState();
@@ -205,9 +281,12 @@ export async function refreshProfileQuietly(): Promise<void> {
     const before = accessFor(authStore.getState());
     authActions.updateProfile(fresh, subscriptionState(fresh.paidUntil, Date.now()));
     const after = accessFor(authStore.getState());
-    if (after === before) return;
-    if (after === 'app') await loadAccount(fresh.id);
-    else stopFarm();
+    if (after !== before) {
+      if (after === 'app') await loadAccount(fresh.id);
+      else closeFarm();
+      return;
+    }
+    if ((await syncPendingRecords()) > 0) void loadRecords();
   } catch {
     // Sin conexión: se conserva lo que hay.
   }
@@ -216,23 +295,70 @@ export async function refreshProfileQuietly(): Promise<void> {
 /** Probar la app sin cuenta: granja demo guardada en el teléfono. */
 export async function enterDemo(): Promise<void> {
   authActions.demo();
-  await startFarm();
+  await openDemoFarm();
 }
 
 export function leaveDemo(): void {
-  stopFarm();
+  closeFarm();
   authActions.signedOut();
 }
 
 /** Administrador o instalador: abrir la granja de un cliente en la app. */
 export async function viewClientFarm(ownerId: string, ownerName: string): Promise<void> {
-  const farm = await fetchFarmOf(getSupabase(), ownerId, speciesProfile);
+  const farm = await fetchFarmOf(getSupabase(), ownerId, speciesProfile, await activeZoneFor(ownerId));
   if (!farm) throw new AccountError('Este cliente no tiene una granja registrada.');
   authActions.setViewing({ ownerId, ownerName, farmName: farm.config.farmName });
-  await startFarm(remoteConfigStore(farm));
+  await openRemoteFarm(farm);
 }
 
 export async function stopViewingClient(): Promise<void> {
   authActions.setViewing(null);
-  await startFarm();
+  await openDemoFarm();
+}
+
+// --- Galpones -----------------------------------------------------------------------------------------
+
+/** Cambia el galpón que muestra la app (se recuerda para la próxima vez). */
+export async function switchZone(zoneId: string | null): Promise<void> {
+  const farm = authStore.getState().farm;
+  if (!farm) return;
+  const next = await fetchFarmOf(getSupabase(), farm.ownerId, speciesProfile, zoneId);
+  if (!next) throw new AccountError('No se encontró la granja.');
+  await cacheIfOwn(next);
+  await openRemoteFarm(next);
+}
+
+/** Agrega un galpón a la granja abierta y lo deja activo. */
+export async function createZone(input: NewZoneInput): Promise<void> {
+  const farm = authStore.getState().farm;
+  if (!farm) throw new AccountError('Los galpones se agregan en una granja real, no en la demo.');
+  const zoneId = await addZone(getSupabase(), farm.farmId, input);
+  await switchZone(zoneId);
+}
+
+/** Elimina un galpón con sus registros (administrador o instalador). */
+export async function removeZone(zoneId: string): Promise<void> {
+  const farm = authStore.getState().farm;
+  if (!farm) return;
+  await deleteZone(getSupabase(), zoneId);
+  await switchZone(farm.activeZoneId === zoneId ? null : farm.activeZoneId);
+}
+
+/**
+ * Después de guardar un registro con muertes: cambian las aves vivas del galpón. En una granja real
+ * las descuenta la base de datos (aquí solo se recarga); en la demo, la configuración del teléfono.
+ */
+export async function refreshFarmAfterRecord(deathsDelta: number): Promise<void> {
+  if (deathsDelta === 0) return;
+  const farm = authStore.getState().farm;
+  if (farm) {
+    const next = await fetchFarmOf(getSupabase(), farm.ownerId, speciesProfile, farm.activeZoneId);
+    if (!next) return;
+    authActions.setFarm(openFarmFrom(next));
+    await cacheIfOwn(next);
+    await startFarm(remoteConfigStore(next));
+    return;
+  }
+  const config = farmStore.getState().config;
+  if (config) await applyFarmConfig({ ...config, population: Math.max(1, config.population - deathsDelta) });
 }

@@ -4,9 +4,10 @@ import type { SpeciesProfile } from '@/domain/profiles';
 import { type FarmConfig, type ThresholdSettings, thresholdsFromProfile } from '@/services/config/farmConfig';
 
 import type { Database, Json } from './database.types';
+import { DATA_POLICY_VERSION } from './dataPolicy';
 import { isValidNationalId, normalizeNationalId } from './identity';
 import { bogotaDate, bogotaMidnight } from './subscription';
-import type { AccountSummary, NewAccountInput, Profile } from './types';
+import type { AccountSummary, NewAccountInput, NewZoneInput, Profile, ZoneSummary } from './types';
 
 /** Conversión entre las filas de Supabase y la configuración que usa la simulación. */
 
@@ -16,8 +17,15 @@ export type FarmRow = Tables['farms']['Row'];
 export type ZoneRow = Tables['zones']['Row'];
 export type FarmUpdate = Tables['farms']['Update'];
 export type ZoneUpdate = Tables['zones']['Update'];
+export type ZoneInsert = Tables['zones']['Insert'];
 
-export function profileFromRow(row: ProfileRow): Profile {
+type ConsentRows = { policy_version: string }[] | null | undefined;
+
+/**
+ * `consentsVisible`: quien consulta puede ver las autorizaciones de ese perfil (el propio usuario o
+ * el administrador). Si no, se deja en null: no se sabe, que no es lo mismo que "no autorizó".
+ */
+export function profileFromRow(row: ProfileRow & { data_consents?: ConsentRows }, consentsVisible = true): Profile {
   return {
     id: row.id,
     role: row.role,
@@ -30,15 +38,36 @@ export function profileFromRow(row: ProfileRow): Profile {
     paidUntil: row.paid_until,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    policyAccepted: consentsVisible ? (row.data_consents ?? []).some((c) => c.policy_version === DATA_POLICY_VERSION) : null,
   };
 }
 
 export function accountFromRow(
-  row: ProfileRow & { farms?: Pick<FarmRow, 'id' | 'name' | 'place_name' | 'region'>[] | null },
+  row: ProfileRow & {
+    farms?: Pick<FarmRow, 'id' | 'name' | 'place_name' | 'region'>[] | null;
+    data_consents?: ConsentRows;
+  },
+  consentsVisible = true,
 ): AccountSummary {
   return {
-    ...profileFromRow(row),
+    ...profileFromRow(row, consentsVisible),
     farms: (row.farms ?? []).map((f) => ({ id: f.id, name: f.name, placeName: f.place_name, region: f.region })),
+  };
+}
+
+export function zoneSummaryFromRow(zone: ZoneRow): ZoneSummary {
+  return { id: zone.id, name: zone.name, population: zone.population, hatchDate: zone.hatch_date };
+}
+
+/** Fila para "Agregar galpón" en una granja. */
+export function zoneInsertFromInput(farmId: string, input: NewZoneInput): ZoneInsert {
+  return {
+    farm_id: farmId,
+    name: input.name.trim(),
+    population: input.population,
+    hatch_date: bogotaDate(input.hatchDate),
+    lighting: input.lighting as unknown as Json,
+    thresholds: input.thresholds as unknown as Json,
   };
 }
 

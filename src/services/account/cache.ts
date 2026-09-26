@@ -37,3 +37,28 @@ export async function cachedAccount(userId?: string): Promise<CachedAccount | nu
 export async function clearAccountCache(): Promise<void> {
   await AsyncStorage.removeItem(KEY).catch(() => {});
 }
+
+/** Último galpón que se vio de cada granja (por dueño): la app vuelve a abrir en ese. */
+const ZONE_KEY = 'vigia.activeZone.v1';
+
+async function readZones(): Promise<Record<string, string>> {
+  try {
+    const raw = await AsyncStorage.getItem(ZONE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function activeZoneFor(ownerId: string): Promise<string | null> {
+  return (await readZones())[ownerId] ?? null;
+}
+
+export async function rememberActiveZone(ownerId: string, zoneId: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ZONE_KEY, JSON.stringify({ ...(await readZones()), [ownerId]: zoneId }));
+  } catch {
+    // No es grave: la próxima vez abre en el primer galpón.
+  }
+}

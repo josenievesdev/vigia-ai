@@ -42,20 +42,41 @@ const ITEMS: Item[] = [
   },
 ];
 
+const POLICY_ITEM: Item = {
+  href: '/data-policy',
+  icon: 'shield-account-outline',
+  title: 'Política de datos',
+  description: 'Qué datos se usan, para qué y tus derechos (Ley 1581 de 2012).',
+};
+
 export function MoreScreen() {
   const c = useTheme();
   const role = useAuthStore((s) => s.profile?.role);
+  const zones = useAuthStore((s) => s.farm?.zones.length ?? 0);
   const staff = role === 'admin' || role === 'installer';
-  const items = staff
-    ? [
-        {
-          ...ACCOUNTS_ITEM,
-          title: role === 'admin' ? 'Clientes e instaladores' : 'Mis clientes',
-          description: role === 'admin' ? `${ACCOUNTS_ITEM.description} Registrar pagos.` : ACCOUNTS_ITEM.description,
-        },
-        ...ITEMS,
-      ]
-    : ITEMS;
+  const items: Item[] = [
+    ...(staff
+      ? [
+          {
+            ...ACCOUNTS_ITEM,
+            title: role === 'admin' ? 'Clientes e instaladores' : 'Mis clientes',
+            description: role === 'admin' ? `${ACCOUNTS_ITEM.description} Registrar pagos.` : ACCOUNTS_ITEM.description,
+          },
+        ]
+      : []),
+    ...(zones > 0
+      ? [
+          {
+            href: '/zones' as const,
+            icon: 'warehouse' as const,
+            title: 'Galpones',
+            description: `${zones} ${zones === 1 ? 'galpón' : 'galpones'} en la granja. Elige cuál ver o agrega uno.`,
+          },
+        ]
+      : []),
+    ...ITEMS,
+    POLICY_ITEM,
+  ];
 
   return (
     <Screen title="Más">

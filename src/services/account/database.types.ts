@@ -15,6 +15,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      data_consents: {
+        Row: {
+          accepted_at: string
+          id: string
+          policy_version: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          id?: string
+          policy_version: string
+          user_id?: string
+        }
+        Update: {
+          accepted_at?: string
+          id?: string
+          policy_version?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       farms: {
         Row: {
           country: string
@@ -77,6 +106,69 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_records: {
+        Row: {
+          created_at: string
+          deaths: number
+          eggs_broken: number
+          eggs_collected: number
+          eggs_dirty: number
+          eggs_floor: number
+          feed_kg: number | null
+          id: string
+          notes: string | null
+          record_date: string
+          recorded_by: string | null
+          updated_at: string
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          deaths?: number
+          eggs_broken?: number
+          eggs_collected: number
+          eggs_dirty?: number
+          eggs_floor?: number
+          feed_kg?: number | null
+          id?: string
+          notes?: string | null
+          record_date: string
+          recorded_by?: string | null
+          updated_at?: string
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          deaths?: number
+          eggs_broken?: number
+          eggs_collected?: number
+          eggs_dirty?: number
+          eggs_floor?: number
+          feed_kg?: number | null
+          id?: string
+          notes?: string | null
+          record_date?: string
+          recorded_by?: string | null
+          updated_at?: string
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_records_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_records_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
             referencedColumns: ["id"]
           },
         ]

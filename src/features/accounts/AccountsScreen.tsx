@@ -32,7 +32,7 @@ export function AccountsScreen() {
   // Se recarga al volver de crear o editar una cuenta.
   const load = useCallback(() => {
     let active = true;
-    listAccounts(getSupabase(), tab)
+    listAccounts(getSupabase(), tab, role === 'admin')
       .then((list) => {
         if (!active) return;
         setError(null);
@@ -44,7 +44,7 @@ export function AccountsScreen() {
     return () => {
       active = false;
     };
-  }, [tab]);
+  }, [tab, role]);
   useFocusEffect(load);
 
   const changeTab = (next: Tab) => {

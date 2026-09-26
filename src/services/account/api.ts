@@ -4,6 +4,7 @@ import type { SpeciesProfile } from '@/domain/profiles';
 import type { FarmConfig } from '@/services/config/farmConfig';
 
 import type { Database } from './database.types';
+import { DATA_POLICY_VERSION } from './dataPolicy';
 import { loginEmailFor } from './identity';
 import {
   accountFromRow,
@@ -11,9 +12,11 @@ import {
   farmUpdateFromConfig,
   newAccountRequest,
   profileFromRow,
+  zoneInsertFromInput,
+  zoneSummaryFromRow,
   zoneUpdateFromConfig,
 } from './mapping';
-import type { AccountSummary, NewAccountInput, Profile, RemoteFarm } from './types';
+import type { AccountSummary, NewAccountInput, NewZoneInput, Profile, RemoteFarm } from './types';
 
 /** Operaciones con Supabase. Reciben el cliente como parámetro (sin dependencias de React). */
 
@@ -64,9 +67,20 @@ export async function signInWithNationalId(sb: Supabase, nationalId: string, pas
 }
 
 export async function fetchProfile(sb: Supabase, userId: string): Promise<Profile | null> {
-  const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+  const { data, error } = await sb
+    .from('profiles')
+    .select('*, data_consents(policy_version)')
+    .eq('id', userId)
+    .maybeSingle();
   if (error) throw toAccountError(error, 'No se pudo cargar tu perfil.');
   return data ? profileFromRow(data) : null;
+}
+
+/** Registra que el usuario aceptó la política de datos vigente (Ley 1581). */
+export async function acceptDataPolicy(sb: Supabase): Promise<void> {
+  const { error } = await sb.from('data_consents').insert({ policy_version: DATA_POLICY_VERSION });
+  // Ya la había aceptado (por ejemplo, un reintento sin señal): no es un error.
+  if (error && error.code !== '23505') throw toAccountError(error, 'No se pudo guardar la autorización.');
 }
 
 /** Cambia la contraseña y marca que ya no es la inicial. */
@@ -83,8 +97,16 @@ export async function changePassword(sb: Supabase, password: string): Promise<vo
 
 // --- Granja ----------------------------------------------------------------------------------------
 
-/** Primera granja de un dueño con su primer galpón (RLS decide si el usuario puede verla). */
-export async function fetchFarmOf(sb: Supabase, ownerId: string, profile: SpeciesProfile): Promise<RemoteFarm | null> {
+/**
+ * Primera granja de un dueño con todos sus galpones (RLS decide si el usuario puede verla).
+ * El galpón activo es `preferredZoneId` si existe; si no, el más antiguo.
+ */
+export async function fetchFarmOf(
+  sb: Supabase,
+  ownerId: string,
+  profile: SpeciesProfile,
+  preferredZoneId?: string | null,
+): Promise<RemoteFarm | null> {
   const { data, error } = await sb
     .from('farms')
     .select('*, zones(*)')
@@ -93,9 +115,33 @@ export async function fetchFarmOf(sb: Supabase, ownerId: string, profile: Specie
     .limit(1)
     .maybeSingle();
   if (error) throw toAccountError(error, 'No se pudo cargar la granja.');
-  const zone = [...(data?.zones ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  const zones = [...(data?.zones ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const zone = zones.find((z) => z.id === preferredZoneId) ?? zones[0];
   if (!data || !zone) return null;
-  return { farmId: data.id, zoneId: zone.id, ownerId: data.owner_id, config: configFromRows(data, zone, profile) };
+  return {
+    farmId: data.id,
+    ownerId: data.owner_id,
+    zones: zones.map(zoneSummaryFromRow),
+    zoneId: zone.id,
+    config: configFromRows(data, zone, profile),
+  };
+}
+
+/** Agrega un galpón a la granja. Devuelve su id. */
+export async function addZone(sb: Supabase, farmId: string, input: NewZoneInput): Promise<string> {
+  const { data, error } = await sb.from('zones').insert(zoneInsertFromInput(farmId, input)).select('id').single();
+  if (error) throw toAccountError(error, 'No se pudo agregar el galpón.');
+  return data.id;
+}
+
+/** Elimina un galpón con sus registros (solo administrador o instalador; la granja conserva al menos uno). */
+export async function deleteZone(sb: Supabase, zoneId: string): Promise<void> {
+  const { data, error } = await sb.from('zones').delete().eq('id', zoneId).select('id');
+  if (error) {
+    if (/al menos un galpón/.test(error.message)) throw new AccountError('La granja debe tener al menos un galpón.');
+    throw toAccountError(error, 'No se pudo eliminar el galpón.');
+  }
+  if (!data.length) throw new AccountError('Solo el administrador o el instalador pueden eliminar galpones.');
 }
 
 export async function saveRemoteFarm(sb: Supabase, farm: RemoteFarm, config: FarmConfig): Promise<void> {
@@ -113,18 +159,23 @@ export async function saveRemoteFarm(sb: Supabase, farm: RemoteFarm, config: Far
 
 // --- Cuentas (administrador e instaladores) ---------------------------------------------------------
 
-const ACCOUNT_SELECT = '*, farms!farms_owner_id_fkey(id, name, place_name, region)' as const;
+const ACCOUNT_SELECT = '*, farms!farms_owner_id_fkey(id, name, place_name, region), data_consents(policy_version)' as const;
 
-export async function listAccounts(sb: Supabase, role: 'client' | 'installer'): Promise<AccountSummary[]> {
+/** `consentsVisible`: solo el administrador ve las autorizaciones de datos de otros usuarios. */
+export async function listAccounts(
+  sb: Supabase,
+  role: 'client' | 'installer',
+  consentsVisible: boolean,
+): Promise<AccountSummary[]> {
   const { data, error } = await sb.from('profiles').select(ACCOUNT_SELECT).eq('role', role).order('full_name');
   if (error) throw toAccountError(error, 'No se pudo cargar la lista.');
-  return data.map(accountFromRow);
+  return data.map((row) => accountFromRow(row, consentsVisible));
 }
 
-export async function fetchAccount(sb: Supabase, id: string): Promise<AccountSummary | null> {
+export async function fetchAccount(sb: Supabase, id: string, consentsVisible: boolean): Promise<AccountSummary | null> {
   const { data, error } = await sb.from('profiles').select(ACCOUNT_SELECT).eq('id', id).maybeSingle();
   if (error) throw toAccountError(error, 'No se pudo cargar la cuenta.');
-  return data ? accountFromRow(data) : null;
+  return data ? accountFromRow(data, consentsVisible) : null;
 }
 
 async function manageUsers<T>(sb: Supabase, body: Record<string, unknown>): Promise<T> {

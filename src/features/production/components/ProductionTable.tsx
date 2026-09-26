@@ -1,14 +1,18 @@
-import { StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui';
-import type { ProductionDay } from '@/domain/production/types';
+import { type DayComparison, dateNoon } from '@/domain/production/records';
 import { Spacing, useTheme } from '@/theme';
 import { formatCount, formatWeekday } from '@/utils/format';
 
-const COLUMNS = ['Día', 'Huevos', 'Postura', 'Muertes', 'Conv.'];
+const COLUMNS = ['Día', 'Registrado', 'Estimado', 'Dif.', 'Muertes'];
 
-/** Últimos días en tabla (equivalente accesible de las gráficas). */
-export function ProductionTable({ days }: { days: ProductionDay[] }) {
+/**
+ * Últimos días: lo registrado frente a lo estimado (equivalente accesible de las gráficas).
+ * Tocar un día abre su registro para anotarlo o corregirlo.
+ */
+export function ProductionTable({ rows }: { rows: DayComparison[] }) {
   const c = useTheme();
   return (
     <View>
@@ -19,27 +23,32 @@ export function ProductionTable({ days }: { days: ProductionDay[] }) {
           </AppText>
         ))}
       </View>
-      {[...days].reverse().map((d) => (
-        <View key={d.day} style={[styles.row, { borderBottomColor: c.border }]}>
+      {[...rows].reverse().map((r) => (
+        <Pressable
+          key={r.date}
+          onPress={() => router.push({ pathname: '/record', params: { date: r.date } })}
+          accessibilityRole="button"
+          accessibilityLabel={`${formatWeekday(dateNoon(r.date))}: ${r.record ? `${r.record.eggsCollected} huevos registrados` : 'sin registro'}, ${Math.round(r.estimatedEggs)} estimados. Tocar para ${r.record ? 'corregir' : 'registrar'}.`}
+          style={({ pressed }) => [styles.row, { borderBottomColor: c.border }, pressed && { opacity: 0.6 }]}>
           <AppText variant="label" style={[styles.cell, styles.first]}>
-            {formatWeekday(d.day)}
+            {formatWeekday(dateNoon(r.date))}
+          </AppText>
+          <AppText variant="body" style={[styles.cell, styles.num]} color={r.record ? c.text : c.textMuted}>
+            {r.record ? `${formatCount(r.record.eggsCollected)}${r.record.pending ? '*' : ''}` : '—'}
+          </AppText>
+          <AppText variant="body" muted style={[styles.cell, styles.num]}>
+            {formatCount(r.estimatedEggs)}
           </AppText>
           <AppText variant="body" style={[styles.cell, styles.num]}>
-            {formatCount(d.eggs)}
+            {r.deviation === null ? '—' : `${r.deviation >= 0 ? '+' : '−'}${Math.abs(r.deviation * 100).toFixed(0)} %`}
           </AppText>
           <AppText variant="body" style={[styles.cell, styles.num]}>
-            {(d.layingRate * 100).toFixed(1)} %
+            {r.record ? r.record.deaths : '—'}
           </AppText>
-          <AppText variant="body" style={[styles.cell, styles.num]}>
-            {d.mortality}
-          </AppText>
-          <AppText variant="body" style={[styles.cell, styles.num]}>
-            {d.feedConversion.toFixed(2)}
-          </AppText>
-        </View>
+        </Pressable>
       ))}
       <AppText variant="caption" muted style={styles.note}>
-        Conv. = kg de alimento por kg de huevo (menor es mejor).
+        Dif. = registrado frente a estimado. * pendiente de enviar (sin señal). Toca un día para registrarlo o corregirlo.
       </AppText>
     </View>
   );

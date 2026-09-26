@@ -2,12 +2,13 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 
-import { AppText, Button, Card, Notice, Screen, TextField } from '@/components/ui';
+import { AppText, Button, Card, Checkbox, Notice, Screen, TextField } from '@/components/ui';
 import { toAccountError } from '@/services/account/api';
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '@/services/account/identity';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Spacing } from '@/theme';
+import { Spacing, useTheme } from '@/theme';
 
+import { CONSENT_LABEL } from './DataConsentScreen';
 import { completePasswordChange, signOut } from './session';
 
 interface ChangePasswordScreenProps {
@@ -20,9 +21,11 @@ interface ChangePasswordScreenProps {
 }
 
 export function ChangePasswordScreen({ mode }: ChangePasswordScreenProps) {
+  const c = useTheme();
   const profile = useAuthStore((s) => s.profile);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -30,6 +33,8 @@ export function ChangePasswordScreen({ mode }: ChangePasswordScreenProps) {
   if (!profile) return null;
   const setup = mode === 'setup';
   const firstName = profile.fullName.split(' ')[0];
+  // En el primer ingreso también se pide la autorización de datos (Ley 1581), en el mismo paso.
+  const askConsent = setup && profile.role !== 'admin' && profile.policyAccepted === false;
 
   const submit = () => {
     const problem = passwordProblem(password, confirm, profile.nationalId);
@@ -37,9 +42,13 @@ export function ChangePasswordScreen({ mode }: ChangePasswordScreenProps) {
       setError(problem);
       return;
     }
+    if (askConsent && !consent) {
+      setError('Para continuar, acepta la autorización de tratamiento de datos.');
+      return;
+    }
     setError(null);
     setSaving(true);
-    completePasswordChange(password)
+    completePasswordChange(password, askConsent)
       .then(() => {
         setDone(true);
         setPassword('');
@@ -90,6 +99,18 @@ export function ChangePasswordScreen({ mode }: ChangePasswordScreenProps) {
         <AppText variant="caption" muted>
           Mínimo {MIN_PASSWORD_LENGTH} caracteres y distinta de tu cédula. Guárdala: tu instalador no la conoce.
         </AppText>
+        {askConsent ? (
+          <Checkbox checked={consent} onChange={setConsent} label={CONSENT_LABEL}>
+            <AppText
+              variant="caption"
+              color={c.primary}
+              accessibilityRole="link"
+              onPress={() => router.push('/data-policy')}
+              style={styles.policyLink}>
+              Leer la política de datos
+            </AppText>
+          </Checkbox>
+        ) : null}
         {error ? <Notice tone="critical" text={error} /> : null}
         <Button label={setup ? 'Guardar y entrar' : 'Guardar contraseña'} onPress={submit} loading={saving} />
       </Card>
@@ -100,4 +121,5 @@ export function ChangePasswordScreen({ mode }: ChangePasswordScreenProps) {
 
 const styles = StyleSheet.create({
   card: { gap: Spacing.md },
+  policyLink: { marginLeft: 24 + Spacing.sm, paddingVertical: Spacing.xs },
 });

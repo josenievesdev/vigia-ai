@@ -37,6 +37,7 @@ const profile = (patch: Partial<Profile> = {}): Profile => ({
   paidUntil: '2026-10-26',
   createdBy: 'i1',
   createdAt: '2026-09-26T00:00:00Z',
+  policyAccepted: true,
   ...patch,
 });
 
@@ -97,6 +98,17 @@ describe('acceso según la cuenta', () => {
     expect(accessFor(signedIn(profile({ mustChangePassword: true, paidUntil: null })))).toBe('changePassword');
     expect(accessFor(signedIn(profile({ paidUntil: '2026-09-01' })))).toBe('blocked');
     expect(accessFor(signedIn(profile()))).toBe('app');
+  });
+
+  it('pide la autorización de datos a clientes e instaladores, no al administrador', () => {
+    expect(accessFor(signedIn(profile({ policyAccepted: false })))).toBe('consent');
+    expect(accessFor(signedIn(profile({ role: 'installer', policyAccepted: false })))).toBe('consent');
+    expect(accessFor(signedIn(profile({ role: 'admin', policyAccepted: false })))).toBe('app');
+    // Primero la contraseña propia; "no se sabe" (null) no bloquea.
+    expect(accessFor(signedIn(profile({ mustChangePassword: true, policyAccepted: false })))).toBe('changePassword');
+    expect(accessFor(signedIn(profile({ policyAccepted: null })))).toBe('app');
+    // Sin autorización no se revisa todavía el pago: primero autorizar.
+    expect(accessFor(signedIn(profile({ policyAccepted: false, paidUntil: '2026-09-01' })))).toBe('consent');
   });
 
   it('el administrador y los instaladores no dependen de la suscripción', () => {

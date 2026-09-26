@@ -23,14 +23,40 @@ export interface Profile {
   paidUntil: string | null;
   createdBy: string | null;
   createdAt: string;
+  /**
+   * Aceptó la política de datos vigente (Ley 1581). null: no se sabe (p. ej. el instalador no ve
+   * las autorizaciones de sus clientes; solo el propio usuario y el administrador).
+   */
+  policyAccepted: boolean | null;
 }
 
-/** Granja guardada en Supabase, con su primer galpón, lista para la simulación. */
+/** Galpón de una granja (resumen para elegir cuál ver). */
+export interface ZoneSummary {
+  id: string;
+  name: string;
+  population: number;
+  /** "AAAA-MM-DD" */
+  hatchDate: string;
+}
+
+/** Granja guardada en Supabase, con el galpón activo listo para la simulación. */
 export interface RemoteFarm {
   farmId: string;
-  zoneId: string;
   ownerId: string;
+  /** Todos los galpones de la granja, del más antiguo al más nuevo. */
+  zones: ZoneSummary[];
+  /** Galpón activo: el que muestra la app. */
+  zoneId: string;
   config: FarmConfig;
+}
+
+/** Datos del formulario "Agregar galpón". */
+export interface NewZoneInput {
+  name: string;
+  population: number;
+  hatchDate: number;
+  lighting: FarmConfig['lighting'];
+  thresholds: FarmConfig['thresholds'];
 }
 
 export interface AccountSummary extends Profile {

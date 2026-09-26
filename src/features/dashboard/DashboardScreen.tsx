@@ -7,6 +7,7 @@ import { formatLocation } from '@/domain/location';
 import { DecisionItem } from '@/features/automation/components/DecisionItem';
 import { OutsideCard } from '@/features/environment/OutsideCard';
 import { ProductionCard } from '@/features/production/components/ProductionCard';
+import { ZoneSwitcher } from '@/features/zones/ZoneSwitcher';
 import { useFarmClock } from '@/hooks/use-farm-clock';
 import { useFarmStore } from '@/store/useFarmStore';
 import { useActuators, useHealth, usePrimaryZone } from '@/store/selectors';
@@ -55,6 +56,7 @@ export function DashboardScreen() {
         />
       }>
       <AccountBanner />
+      <ZoneSwitcher />
       <DemoBanner />
       <HealthBanner health={health} alertCount={alerts.length} clock={formatClock(now)} />
       <OutsideCard />

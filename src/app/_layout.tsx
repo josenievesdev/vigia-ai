@@ -56,6 +56,9 @@ export default function RootLayout() {
           <Stack.Screen name="automation" options={{ title: 'Control de equipos' }} />
           <Stack.Screen name="demo" options={{ title: 'Modo demo' }} />
           <Stack.Screen name="settings" options={{ title: 'Configuración' }} />
+          <Stack.Screen name="record" options={{ title: 'Registro de producción' }} />
+          <Stack.Screen name="zones/index" options={{ title: 'Galpones' }} />
+          <Stack.Screen name="zones/new" options={{ title: 'Nuevo galpón' }} />
           <Stack.Protected guard={signedIn}>
             <Stack.Screen name="change-password" options={{ title: 'Contraseña' }} />
           </Stack.Protected>
@@ -72,6 +75,11 @@ export default function RootLayout() {
           <Stack.Screen name="password-setup" options={{ headerShown: false }} />
         </Stack.Protected>
 
+        {/* Autorización de datos (Ley 1581) pendiente, para quien ya tenía contraseña propia. */}
+        <Stack.Protected guard={access === 'consent'}>
+          <Stack.Screen name="data-consent" options={{ headerShown: false }} />
+        </Stack.Protected>
+
         <Stack.Protected guard={access === 'blocked'}>
           <Stack.Screen name="blocked" options={{ headerShown: false }} />
         </Stack.Protected>
@@ -79,6 +87,10 @@ export default function RootLayout() {
         <Stack.Protected guard={access === 'signedOut' || access === 'loading'}>
           <Stack.Screen name="login" options={{ headerShown: false }} />
         </Stack.Protected>
+
+        {/* Siempre disponible (también antes de aceptar). Va al final: la navegación nunca la elige
+            como "primera pantalla disponible" al cambiar de estado. */}
+        <Stack.Screen name="data-policy" options={{ title: 'Política de datos' }} />
       </Stack>
     </ThemeProvider>
   );

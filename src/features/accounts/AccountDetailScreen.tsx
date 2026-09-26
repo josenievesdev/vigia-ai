@@ -40,9 +40,10 @@ export function AccountDetailScreen() {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
 
+  const consentsVisible = me?.role === 'admin';
   const load = useCallback(() => {
     let active = true;
-    fetchAccount(getSupabase(), id)
+    fetchAccount(getSupabase(), id, consentsVisible)
       .then((a) => {
         if (!active) return;
         setLoadError(a ? null : 'No se encontró la cuenta.');
@@ -54,7 +55,7 @@ export function AccountDetailScreen() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, consentsVisible]);
   useFocusEffect(load);
 
   if (!account) {
@@ -112,6 +113,9 @@ export function AccountDetailScreen() {
         <Field label="Correo" value={account.email ?? '—'} />
         <Field label="Municipio" value={account.municipality ?? '—'} />
         <Field label="Contraseña" value={account.mustChangePassword ? 'Aún es la cédula (no ha entrado)' : 'Propia'} />
+        {account.policyAccepted !== null && account.role !== 'admin' ? (
+          <Field label="Autorización de datos" value={account.policyAccepted ? 'Aceptada' : 'Pendiente'} />
+        ) : null}
       </Card>
 
       {isClient ? (

@@ -8,7 +8,7 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
 **Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-## Estado actual (fases 0–7 y 9a)
+## Estado actual (fases 0–7, 9a y 9b)
 
 | Módulo | Estado |
 |---|---|
@@ -26,8 +26,10 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | Producción: huevos, % de postura, mortalidad, alimento y agua por ave, conversión, y qué la está afectando (calor, luz, agua…) | ✅ |
 | Configuración de la granja: ubicación, galpón, edad del lote, programa de luz y umbrales | ✅ |
 | Cuentas (Supabase): ingreso con cédula, administrador / instalador / cliente, suscripción con bloqueo en la base de datos, demo sin cuenta | ✅ |
-| Registro diario de producción real | Fase 9b — siguiente |
-| Hardware (MQTT/ESP32), resto del servidor, IA, visión artificial | Fases 8, 9c, 10 y 11 |
+| Registro diario de producción real: registrado frente a estimado, ajuste del modelo a la granja y aviso de caída de postura | ✅ |
+| Varios galpones por granja y autorización de tratamiento de datos (Ley 1581) | ✅ |
+| App instalable, notificaciones, panel de la empresa | Fase 9c — siguiente |
+| Hardware (MQTT/ESP32), IA, visión artificial | Fases 8, 10 y 11 |
 
 Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de la ubicación (Valledupar por defecto; Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia; la producción, con 30 días estimados con el clima real del último mes.
 
@@ -72,11 +74,12 @@ src/
 │   ├── weather/      # Clima real (Open-Meteo) + respaldo sintético + búsqueda de lugares
 │   ├── production/   # ProductionService: historial de 30 días + día en curso
 │   ├── config/       # Configuración de la granja: validación y guardado en el teléfono
-│   ├── account/      # Cuentas: identidad por cédula, suscripción, acceso, operaciones con Supabase
+│   ├── account/      # Cuentas: identidad por cédula, suscripción, acceso, política de datos, operaciones con Supabase
+│   ├── records/      # Registro diario de producción: Supabase, teléfono (demo) y pendientes sin señal
 │   └── runtime/      # FarmRuntime: orquesta fuente → motor → producción → store
 ├── lib/              # Cliente de Supabase
-├── store/            # Estado global (Zustand): granja y sesión
-├── features/         # Pantallas por módulo (dashboard, twin, production, alerts, more, settings, account, accounts…)
+├── store/            # Estado global (Zustand): granja, sesión y registros
+├── features/         # Pantallas por módulo (dashboard, twin, production, zones, alerts, more, settings, account, accounts…)
 ├── components/ui/    # Sistema de componentes reutilizables
 ├── components/charts/# Gráficas SVG (serie temporal, barras, minigráfica)
 ├── theme/            # Tokens de color (claro/oscuro), espaciado

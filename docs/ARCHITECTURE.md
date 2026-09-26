@@ -168,6 +168,8 @@ La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altit
 
 ## 10. Producción y configuración (fase 7)
 
+> Desde la fase 9b (sección 12) este modelo es **lo estimado**: la referencia contra la que se compara lo que la granja registra cada día.
+
 **Producción** (`domain/production`, puro y con pruebas; `services/production/ProductionService.ts`):
 - **Modelo:** la postura esperada sale de la curva por edad del lote (pico de ~95 % a las 30 semanas). Sobre ella se multiplican factores:
   - luz: −2 % por cada hora que falte para 16 h;
@@ -257,7 +259,32 @@ Supabase: Postgres, Auth y reglas de acceso por fila (RLS). El esquema vive en `
 | `npm run db:seed-admin` | Crea el primer administrador |
 | `npm run test:live` | Pruebas de integración contra Supabase con usuarios temporales, que se borran al final |
 
-## 12. Modo demo
+## 12. Producción real, galpones y autorización de datos (fase 9b)
+
+**Registro diario de producción** (`production_records`, un registro por galpón y día):
+- **Qué se anota:** huevos recogidos (cubetas de 30 y sueltos: todos, incluidos rotos, de piso y sucios), cuántos de esos son rotos, de piso y sucios, las aves muertas, el alimento servido (bultos de 40 kg, opcional) y notas.
+- **Quién y cuándo:** el dueño, su instalador o el administrador, en la pantalla "Registro de producción". Se puede anotar o corregir hasta 7 días atrás.
+- **Lo registrado es el dato; el modelo es la referencia.** Cada número de la app dice si es "Registrado" o "Estimado".
+- **Comparación y aviso** (`domain/production/records.ts`, puro y con pruebas):
+  - cada día se compara lo registrado con lo que estimó el modelo con el clima real;
+  - con 5 días o más, el modelo se ajusta a la granja: mediana de registrado/estimado de los últimos 14 días;
+  - si los 2 últimos días registrados quedan más de un 8 % por debajo de lo normal de esa granja, la app avisa. El clima ya está descontado, así que la causa es otra: agua, alimento, salud o nidos.
+- **Aves vivas:** las muertes registradas descuentan las aves del galpón (disparador en la base de datos). Corregir o borrar un registro las devuelve.
+- **Sin señal:** el registro de una granja real se guarda en el teléfono y se envía al volver la conexión. Reenviar no duplica, porque hay un registro por galpón y día.
+- **Demo:** en "Ver demo" los registros se guardan en el teléfono.
+
+**Varios galpones por granja:**
+- La app muestra un galpón a la vez: el galpón activo, que se recuerda por granja. Simulación, producción, configuración y registros son de cada galpón.
+- Más → Galpones sirve para elegir cuál ver y agregar galpones. Cuando hay varios, el inicio y Producción muestran cuál se está viendo.
+- Cualquiera que vea la granja puede agregar galpones. Solo el administrador o el instalador los elimina, y la granja nunca se queda sin galpones.
+
+**Autorización de tratamiento de datos (Ley 1581 de 2012):**
+- **Quién la da:** clientes e instaladores, una vez, en el primer ingreso (junto con la contraseña nueva) o en una pantalla propia si ya tenían cuenta. El administrador es el responsable del tratamiento y no la da.
+- **Prueba:** `data_consents` guarda quién aceptó, qué versión y cuándo. El administrador ve si cada cuenta la aceptó.
+- **La política:** el texto está en `services/account/dataPolicy.ts` y se puede leer siempre en Más → Política de datos. Si cambia de fondo, se sube `DATA_POLICY_VERSION` y la app la pide de nuevo.
+- **Pendiente antes de usarla con clientes reales:** es un texto base. La empresa debe completar su razón social, NIT, dirección y correo, y revisarlo con un abogado.
+
+## 13. Modo demo
 
 `src/services/simulation/scenarios.ts` define los escenarios:
 - ola de calor
@@ -270,7 +297,7 @@ Los escenarios **modifican el modelo físico**, no los números que se muestran.
 
 **Mientras no haya hardware**, el interior del galpón se simula, pero con el clima y el sol reales de la ubicación (fase 6).
 
-## 13. Preparación para hardware (fase 8, no implementado)
+## 14. Preparación para hardware (fase 8, no implementado)
 
 Los IDs ya tienen la forma necesaria para mapearse a tópicos MQTT:
 
@@ -288,22 +315,23 @@ Plan:
 
 **Decisión clave:** el control crítico (ventilación, agua) no puede depender de que el teléfono esté encendido. El ESP32 o un gateway tendrá un control básico de seguridad con umbrales locales, y el motor completo correrá en el servidor. La app supervisará y dará órdenes. El motor ya es TypeScript puro para poder moverlo sin reescribirlo.
 
-## 14. Backend (fase 9: 9a hecha, el resto pendiente)
+## 15. Backend (fase 9: 9a y 9b hechas, el resto pendiente)
 
-Supabase. Ya está hecho (9a, sección 11):
+Supabase. Ya está hecho (9a y 9b, secciones 11 y 12):
 - autenticación
-- granjas por cliente, instalador y administrador
+- granjas por cliente, instalador y administrador, con varios galpones
 - configuración de la granja en la base de datos
 - suscripción
+- registro diario de producción real
+- autorización de tratamiento de datos (Ley 1581)
 
 Pendiente:
-- registro diario de producción real (9b)
 - histórico de lecturas (nueva implementación de `HistoryRepository`)
 - persistencia de alertas y decisiones
 - notificaciones push de alertas críticas
 - ejecución del motor en el servidor y dispositivos (con el hardware)
 
-## 15. Visión artificial (fase 11, no implementada)
+## 16. Visión artificial (fase 11, no implementada)
 
 Contrato previsto en `src/domain/vision/types.ts`:
 - **Detección de movimiento:** índice de movimiento por zona.
@@ -313,7 +341,7 @@ Contrato previsto en `src/domain/vision/types.ts`:
 
 El análisis de video se hará en un gateway local o en la nube, no en el teléfono. La app recibirá `VisionEvent`/`VisionInsights`, que se añadirán al `ZoneContext`, para que las reglas o la IA combinen visión y sensores (por ejemplo: baja actividad + aglomeración + temperatura alta → estrés térmico). El tipo de alerta `abnormalBehavior` ya está reservado.
 
-## 16. Hoja de ruta
+## 17. Hoja de ruta
 
 ### Bloque A: app completa sin hardware (todo simulado)
 | Fase | Contenido | Estado |
@@ -327,15 +355,15 @@ El análisis de video se hará en un gateway local o en la nube, no en el teléf
 | 6 | **Mundo real**: ubicación (Valledupar), sol y clima reales (Open-Meteo), gallinas con IA de NPC | ✅ |
 | 7 | **Producción** (postura, mortalidad, consumo, conversión y sus causas) + **configuración** persistente (ubicación, galpón, programa de luz, umbrales) | ✅ (validar en teléfono) |
 
-**Pendiente de producción:** registro manual de huevos recogidos y muertes, para comparar con lo estimado y calibrar el modelo. Más adelante, conteo automático (visión, fase 11).
+**Producción:** el registro diario real ya está (fase 9b, sección 12). Más adelante, conteo automático de huevos (visión, fase 11).
 
 ### Bloque B: granja real (piloto)
 | Fase | Contenido | Estado |
 |---|---|---|
 | 8 | Hardware: ESP32 + sensores + relés vía MQTT; control de seguridad local | Pendiente (sin hardware aún) |
-| 9a | Cuentas: ingreso con cédula, roles (administrador, instalador, cliente), granjas en Supabase, suscripción con bloqueo en la base de datos | ✅ (validar en teléfono) |
-| 9b | Registro diario de producción real (lo esperado por el modelo pasa a ser la referencia) | ⏭️ Siguiente |
-| 9c | Historial persistente, push, panel de la empresa, motor en servidor, proxy de clima con licencia comercial | Pendiente |
+| 9a | Cuentas: ingreso con cédula, roles (administrador, instalador, cliente), granjas en Supabase, suscripción con bloqueo en la base de datos | ✅ |
+| 9b | Registro diario de producción real (el modelo pasa a ser la referencia), varios galpones por granja, autorización de datos (Ley 1581) | ✅ (validar en teléfono) |
+| 9c | App instalable (APK), notificaciones, panel de la empresa, historial persistente, motor en servidor, proxy de clima con licencia comercial | ⏭️ Siguiente |
 
 ### Bloque C: inteligencia
 | Fase | Contenido | Estado |
