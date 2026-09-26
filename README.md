@@ -31,7 +31,9 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | App instalable, notificaciones, panel de la empresa | Fase 9c — siguiente |
 | Hardware (MQTT/ESP32), IA, visión artificial | Fases 8, 10 y 11 |
 
-Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de la ubicación (Valledupar por defecto; Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia; la producción, con 30 días estimados con el clima real del último mes.
+Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de la ubicación (Valledupar por defecto; Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia; la producción, con 30 días estimados con el clima real del último mes. Para presentar la app se usa **"Ver demo sin cuenta"**.
+
+> **¿Retomas el proyecto?** Empieza por [docs/ESTADO.md](docs/ESTADO.md): dónde quedó todo, pendientes y próximos pasos.
 
 ## Comandos
 
@@ -90,4 +92,4 @@ supabase/
 scripts/              # Comandos del servidor (migraciones, funciones, primer administrador)
 ```
 
-Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el detalle.
+Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el detalle y [docs/ESTADO.md](docs/ESTADO.md) para el estado actual y los próximos pasos.

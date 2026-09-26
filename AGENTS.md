@@ -42,6 +42,7 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## VigíaAI — project conventions
 
+- **Start here:** `docs/ESTADO.md` says where the project stands, what's pending, the recommended next steps and how the user works (Spanish, phase approval, commit after they validate on the phone). Then `docs/ARCHITECTURE.md` for the design.
 - UI text is **Spanish**; code identifiers are English. Architecture: `docs/ARCHITECTURE.md`.
 - `src/domain`, `src/engine`, `src/services` are pure TypeScript — no React/Expo imports there.
 - All telemetry goes through `TelemetrySource`; the source is chosen only in `src/services/runtime/index.ts`.
