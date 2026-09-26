@@ -1,56 +1,59 @@
-# Welcome to your Expo app 👋
+# VigíaAI (nombre provisional)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
-## Get started
+**Para quién:**
+- **Propietarios de granjas**: ven el estado de su instalación, reciben alertas y controlan equipos desde el móvil.
+- **Empresas integradoras de automatización agropecuaria**: instalan sensores y controladores (ESP32, etc.) y usan VigíaAI como plataforma de supervisión para sus clientes.
 
-1. Install dependencies
+**Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-   ```bash
-   npm install
-   ```
+## Estado actual (fases 0–4)
 
-2. Start the app
+| Módulo | Estado |
+|---|---|
+| Base del proyecto (Expo SDK 57, TypeScript estricto, Expo Router) | ✅ |
+| Modelo de dominio y perfil "gallinas ponedoras" | ✅ |
+| Simulación IoT con modelo físico en circuito cerrado | ✅ |
+| Dashboard | ✅ |
+| Motor de reglas con registro de decisiones | ✅ |
+| Alertas (deduplicación, severidad, antiparpadeo, historial) | ✅ |
+| Modo demo (ola de calor, falta de agua o alimento, baja actividad, sensor caído) | ✅ |
+| Historial y gráficas por sensor (bandas de umbral, franjas de equipos, cursor, tabla por hora, minigráficas) | ✅ |
+| Gemelo digital 3D (simulado) | Fase 5 — siguiente |
+| Módulo de producción + configuración | Fase 6 |
+| Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 7–10 |
 
-   ```bash
-   npx expo start
-   ```
+Sin hardware todavía: toda la app funciona sobre la simulación, que arranca con 24 h de historia previa.
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Comandos
 
 ```bash
-npm run reset-project
+npm install
+npx expo start        # abre en Expo Go (escanear QR) o pulsa w para web
+npm test              # pruebas del motor y la simulación
+npm run typecheck     # TypeScript
+npm run lint          # ESLint
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Estructura
 
-### Other setup steps
+```
+src/
+├── app/              # Rutas (Expo Router): solo re-exportan pantallas
+├── domain/           # Tipos, perfiles de especie, catálogo, visión (futuro). TS puro
+├── engine/           # Motor de reglas, alertas, contexto. TS puro
+├── services/
+│   ├── telemetry/    # Interfaz TelemetrySource (frontera con el hardware)
+│   ├── simulation/   # SimulatedSource + modelo físico + escenarios demo
+│   ├── history/      # HistoryRepository (historial) + analítica del periodo
+│   └── runtime/      # FarmRuntime: orquesta fuente → motor → store
+├── store/            # Estado global (Zustand) y selectores
+├── features/         # Pantallas por módulo (dashboard, sensors, alerts, automation, demo)
+├── components/ui/    # Sistema de componentes reutilizables
+├── components/charts/# Gráficas SVG (serie temporal, minigráfica)
+├── theme/            # Tokens de color (claro/oscuro), espaciado
+├── hooks/, utils/
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el detalle.

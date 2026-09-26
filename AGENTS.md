@@ -39,3 +39,17 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## VigíaAI — project conventions
+
+- UI text is **Spanish**; code identifiers are English. Architecture: `docs/ARCHITECTURE.md`.
+- `src/domain`, `src/engine`, `src/services` are pure TypeScript — no React/Expo imports there.
+- All telemetry goes through `TelemetrySource`; the source is chosen only in `src/services/runtime/index.ts`.
+- Species-specific values (thresholds, photoperiod, consumption) live in `src/domain/profiles`, never hardcoded in rules or UI.
+- Every automated actuator change must produce a `Decision` with a human-readable reason.
+- `store/farmStore.ts` is a vanilla (React-free) store used by the runtime; UI reads it via `useFarmStore` (`store/useFarmStore.ts`).
+- Zustand selectors must not return new objects/arrays each call — use `useShallow` over stable references and derive with `useMemo` (see `src/store/selectors.ts`).
+- On web, `Link asChild` cannot receive an array `style`; use `router.push` on a `Pressable` instead.
+- Screens read history only through `useSensorHistory` (`src/hooks/use-history.ts`); never call the repository from components.
+- Charts: one series per chart in `chartLine`; status colors only for threshold bands, always explained by a legend; keep a table-view equivalent. SVG text needs `fontFamily` on web (defaults to serif).
+- Before finishing: `npm test`, `npx tsc --noEmit`, `npx expo lint`.

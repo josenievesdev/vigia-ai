@@ -1,0 +1,63 @@
+import { ACTUATOR_KINDS, SENSOR_KINDS } from '@/domain/catalog';
+import type { ActuatorKind, Actuator, Farm, Sensor, SensorKind } from '@/domain/types';
+
+import type { ZoneModelParams } from './environmentModel';
+
+/**
+ * Configuración de la granja de demostración. Cuando exista backend, esta
+ * información (granja, zonas, dispositivos) vendrá de la base de datos.
+ */
+
+export interface FarmSetup {
+  farm: Farm;
+  sensors: Sensor[];
+  actuators: Actuator[];
+}
+
+const FARM_ID = 'farm-el-paraiso';
+const ZONE_ID = 'zone-galpon-1';
+const DEVICE_ID = 'esp32-galpon-1';
+
+const sensorKinds: SensorKind[] = [
+  'temperature',
+  'humidity',
+  'light',
+  'waterLevel',
+  'feedLevel',
+  'animalActivity',
+];
+const actuatorKinds: ActuatorKind[] = ['ventilation', 'feeder', 'waterPump', 'lighting'];
+
+export const demoFarmSetup: FarmSetup = {
+  farm: {
+    id: FARM_ID,
+    name: 'Granja El Paraíso',
+    speciesId: 'layingHens',
+    zones: [{ id: ZONE_ID, farmId: FARM_ID, name: 'Galpón 1', population: 1200 }],
+  },
+  sensors: sensorKinds.map((kind) => ({
+    id: `${ZONE_ID}:${kind}`,
+    deviceId: DEVICE_ID,
+    zoneId: ZONE_ID,
+    kind,
+    label: SENSOR_KINDS[kind].label,
+    unit: SENSOR_KINDS[kind].unit,
+  })),
+  actuators: actuatorKinds.map((kind) => ({
+    id: `${ZONE_ID}:${kind}`,
+    deviceId: DEVICE_ID,
+    zoneId: ZONE_ID,
+    kind,
+    label: ACTUATOR_KINDS[kind].label,
+  })),
+};
+
+export function defaultZoneParams(population: number): ZoneModelParams {
+  return {
+    population,
+    tankLiters: 200,
+    hopperKg: 120,
+    pumpLitersPerHour: 120,
+    feederKgPerHour: 60,
+  };
+}

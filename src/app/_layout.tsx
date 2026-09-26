@@ -1,18 +1,34 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getFarmRuntime } from '@/services/runtime';
+import { useTheme } from '@/theme';
 
-SplashScreen.preventAutoHideAsync();
+export default function RootLayout() {
+  const scheme = useColorScheme();
+  const c = useTheme();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    const runtime = getFarmRuntime();
+    runtime.start().catch((error) => console.warn('[VigíaAI] No se pudo iniciar la telemetría', error));
+    return () => runtime.stop();
+  }, []);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+    <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <StatusBar style="auto" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: c.surface },
+          headerTintColor: c.text,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: c.background },
+        }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Inicio' }} />
+        <Stack.Screen name="sensor/[kind]" options={{ title: '' }} />
+      </Stack>
     </ThemeProvider>
   );
 }
