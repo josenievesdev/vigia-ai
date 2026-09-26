@@ -15,9 +15,11 @@ export default function RootLayout() {
   const c = useTheme();
 
   useEffect(() => {
-    const runtime = getFarmRuntime();
-    runtime.start().catch((error) => console.warn('[VigíaAI] No se pudo iniciar la telemetría', error));
-    return () => runtime.stop();
+    getFarmRuntime()
+      .start()
+      .catch((error) => console.warn('[VigíaAI] No se pudo iniciar la telemetría', error));
+    // Se detiene el runtime vigente (puede haber cambiado de modo desde la pestaña Demo).
+    return () => getFarmRuntime().stop();
   }, []);
 
   return (

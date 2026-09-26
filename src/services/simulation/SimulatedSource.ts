@@ -12,6 +12,9 @@ import type {
   TelemetrySource,
   Unsubscribe,
 } from '@/services/telemetry/TelemetrySource';
+import { SyntheticWeather } from '@/services/weather/syntheticWeather';
+import type { WeatherProvider } from '@/services/weather/types';
+import { createRng, noise, type Rng } from '@/utils/random';
 
 import type { FarmSetup } from './demoFarm';
 import { defaultZoneParams } from './demoFarm';
@@ -23,14 +26,22 @@ import {
   initialEnvironment,
   type ZoneModelParams,
 } from './environmentModel';
-import { createRng, noise, type Rng } from '@/utils/random';
 import type { ScenarioId } from './scenarios';
+
+/**
+ * - live: el reloj de la simulación es el reloj real (demo "en vivo").
+ * - accelerated: el tiempo avanza `timeScale` veces más rápido (presentaciones).
+ */
+export type SimulationClock = 'live' | 'accelerated';
 
 export interface SimulatedSourceOptions {
   setup: FarmSetup;
+  clock?: SimulationClock;
+  /** Clima exterior (real u otro). Por defecto, el clima sintético de respaldo. */
+  weather?: WeatherProvider;
   /** Intervalo real entre lecturas, ms. */
   tickMs?: number;
-  /** Segundos simulados por segundo real (60 = 1 min de granja por segundo). */
+  /** Solo reloj acelerado: segundos simulados por segundo real (60 = 1 min por segundo). */
   timeScale?: number;
   startTime?: Timestamp;
   seed?: number;
@@ -51,12 +62,6 @@ const SENSOR_NOISE: Record<keyof EnvironmentState, number> = {
   animalActivity: 1,
 };
 
-function todayAt(hour: number): Timestamp {
-  const d = new Date();
-  d.setHours(hour, 0, 0, 0);
-  return d.getTime();
-}
-
 /**
  * Fuente de telemetría simulada. Se comporta como un gateway real: publica
  * lecturas periódicas y ejecuta los comandos que recibe sobre sus actuadores,
@@ -73,6 +78,8 @@ export class SimulatedSource implements TelemetrySource {
   private readonly zones = new Map<string, ZoneSim>();
   private readonly actuators = new Map<string, ActuatorState>();
   private readonly scenarios = new Set<ScenarioId>();
+  private readonly weather: WeatherProvider;
+  readonly clock: SimulationClock;
   private timer: ReturnType<typeof setInterval> | null = null;
   private time: Timestamp;
   private timeScale: number;
@@ -82,9 +89,11 @@ export class SimulatedSource implements TelemetrySource {
   constructor(options: SimulatedSourceOptions) {
     this.setup = options.setup;
     this.profile = getSpeciesProfile(options.setup.farm.speciesId);
+    this.clock = options.clock ?? 'accelerated';
+    this.weather = options.weather ?? new SyntheticWeather(options.setup.farm.location);
     this.tickMs = options.tickMs ?? 1000;
-    this.timeScale = options.timeScale ?? 60;
-    this.time = options.startTime ?? todayAt(8);
+    this.timeScale = this.clock === 'live' ? 1 : (options.timeScale ?? 60);
+    this.time = options.startTime ?? Date.now();
     this.rng = createRng(options.seed ?? Date.now());
 
     for (const zone of this.setup.farm.zones) {
@@ -100,7 +109,15 @@ export class SimulatedSource implements TelemetrySource {
   async start(): Promise<void> {
     if (this.timer) return;
     this.emit();
-    this.timer = setInterval(() => this.advance((this.tickMs / 1000) * this.timeScale), this.tickMs);
+    this.timer = setInterval(() => {
+      if (this.clock === 'live') {
+        // En vivo, la simulación sigue al reloj real (sin deriva por el temporizador).
+        const behind = (Date.now() - this.time) / 1000;
+        if (behind > 0) this.advance(behind);
+      } else {
+        this.advance((this.tickMs / 1000) * this.timeScale);
+      }
+    }, this.tickMs);
   }
 
   stop(): void {
@@ -158,8 +175,9 @@ export class SimulatedSource implements TelemetrySource {
     return this.scenarios;
   }
 
+  /** Solo en reloj acelerado; en vivo el tiempo es siempre el real. */
   setTimeScale(timeScale: number): void {
-    this.timeScale = timeScale;
+    if (this.clock === 'accelerated') this.timeScale = timeScale;
   }
 
   getTimeScale(): number {
@@ -177,6 +195,7 @@ export class SimulatedSource implements TelemetrySource {
         this.scenarios,
         this.profile,
         zone.params,
+        this.weather,
         this.rng,
       );
     }

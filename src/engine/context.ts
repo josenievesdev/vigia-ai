@@ -1,5 +1,6 @@
+import { lightState, NATURAL_LIGHT } from '@/domain/lighting';
 import type { SpeciesProfile } from '@/domain/profiles';
-import { hourOfDay, isPhotoperiod } from '@/domain/time';
+import { hourOfDay } from '@/domain/time';
 import type {
   Actuator,
   ActuatorMode,
@@ -28,13 +29,12 @@ export interface FarmSnapshot {
 /** Traduce el estado plano de la granja al contexto por zona que consumen las reglas. */
 export function buildZoneContexts(s: FarmSnapshot): ZoneContext[] {
   const hour = hourOfDay(s.now);
-  const photoperiod = isPhotoperiod(s.now, s.profile);
 
   return s.farm.zones.map((zone) => {
     const ctx: ZoneContext = {
       now: s.now,
       hour,
-      isPhotoperiod: photoperiod,
+      light: lightState(s.now, s.farm.location, zone.lighting ?? NATURAL_LIGHT),
       zone,
       profile: s.profile,
       readings: {},

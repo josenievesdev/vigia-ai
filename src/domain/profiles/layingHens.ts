@@ -20,6 +20,7 @@ export const layingHensProfile: SpeciesProfile = {
     highTemperature: { warning: 29, critical: 32 },
     lowTemperature: { warning: 14, critical: 10 },
     highHumidity: { warning: 80, critical: 90 },
+    highHumidityMinTemperature: 28,
     lowWater: { warning: 20, critical: 10 },
     lowFeed: { warning: 20, critical: 10 },
     lowActivity: { warning: 35, critical: 20 },

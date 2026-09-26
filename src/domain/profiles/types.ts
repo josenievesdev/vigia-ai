@@ -33,6 +33,11 @@ export interface SpeciesProfile {
     highTemperature: Band;
     lowTemperature: Band;
     highHumidity: Band;
+    /**
+     * La humedad alta solo es un riesgo agudo con calor (agrava el estrés
+     * térmico). Por debajo de esta temperatura (°C) no se alerta.
+     */
+    highHumidityMinTemperature: number;
     /** % del tanque/tolva por debajo del cual se alerta. */
     lowWater: Band;
     lowFeed: Band;

@@ -1,3 +1,4 @@
+import type { LightState } from '@/domain/lighting';
 import type { SpeciesProfile } from '@/domain/profiles';
 import type {
   Actuator,
@@ -17,7 +18,8 @@ import type {
 export interface ZoneContext {
   now: Timestamp;
   hour: number;
-  isPhotoperiod: boolean;
+  /** Sol real de la ubicación + programa de iluminación del galpón. */
+  light: LightState;
   zone: Zone;
   profile: SpeciesProfile;
   /** Últimos valores de sensores EN LÍNEA. Un sensor caído no aporta valor. */

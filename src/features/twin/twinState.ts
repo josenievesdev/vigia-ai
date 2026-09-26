@@ -1,9 +1,12 @@
+import type { BehaviorWorld } from '@/domain/behavior/types';
 import { SENSOR_KINDS } from '@/domain/catalog';
+import type { LightingProgram, LightState } from '@/domain/lighting';
 import type { SpeciesProfile } from '@/domain/profiles';
 import { readingStatus } from '@/domain/status';
-import { hourOfDay } from '@/domain/time';
 import type { ActuatorKind, Alert, AlertType, SensorKind, Timestamp } from '@/domain/types';
-import { formatReading } from '@/utils/format';
+import { isRaining } from '@/services/weather/weatherCodes';
+import type { OutsideConditions } from '@/services/weather/types';
+import { formatClock, formatReading } from '@/utils/format';
 
 /**
  * Traduce el estado de la granja al estado visual del gemelo digital.
@@ -30,9 +33,30 @@ export interface TwinSensorNode {
   status: TwinStatus;
 }
 
+/** Condiciones que perciben las aves (entrada de su comportamiento, fase 6.3). */
+export interface FlockConditions {
+  /** 0–1: estrés por calor (temperatura interior, agravado por la humedad). */
+  heatStress: number;
+  /** 0–1: frío. */
+  cold: number;
+  /** 0–1: decaimiento sin causa ambiental (enfermedad, estrés). */
+  sickness: number;
+  waterAvailable: boolean;
+  feedAvailable: boolean;
+}
+
 export interface TwinState {
-  /** 0 (noche) … 1 (mediodía). */
+  /** Luz natural 0 (noche) … 1 (día pleno), según el sol real. */
   daylight: number;
+  /** Posición real del sol (grados). */
+  sun: { elevation: number; azimuth: number };
+  /** 0–1: intensidad del crepúsculo (cielo anaranjado al amanecer/atardecer). */
+  twilight: number;
+  /** 0–1: nubosidad real. */
+  cloudCover: number;
+  /** 0 (seco) … 1 (aguacero). */
+  rain: number;
+  flock: FlockConditions;
   lampsOn: boolean;
   fanActive: boolean;
   feederActive: boolean;
@@ -54,7 +78,10 @@ export interface TwinState {
 export interface TwinInput {
   now: Timestamp;
   profile: SpeciesProfile;
-  isPhotoperiod: boolean;
+  light: LightState;
+  lighting: LightingProgram;
+  /** Clima exterior (real o de respaldo); null si aún no hay datos. */
+  outside: OutsideConditions | null;
   readings: Partial<Record<SensorKind, { value: number | undefined; online: boolean }>>;
   actuators: Partial<Record<ActuatorKind, boolean>>;
   alerts: Alert[];
@@ -82,19 +109,20 @@ export const SENSOR_ELEMENT: Record<SensorKind, TwinElementId> = {
   animalActivity: 'hens',
 };
 
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
 const RANK: Record<TwinStatus, number> = { neutral: 0, normal: 1, offline: 2, warning: 3, critical: 4 };
 const worst = (...s: TwinStatus[]): TwinStatus => s.reduce((a, b) => (RANK[b] > RANK[a] ? b : a), 'neutral');
 
 export function buildTwinState(input: TwinInput): TwinState {
-  const { profile, readings, actuators } = input;
-  const hour = hourOfDay(input.now);
-  const daylight = Math.max(0, Math.sin((Math.PI * (hour - 6)) / 12));
+  const { profile, readings, actuators, light, outside } = input;
+  const temperature = readings.temperature?.online ? readings.temperature.value : undefined;
 
   const sensorStatus = (kind: SensorKind): TwinStatus => {
     const r = readings[kind];
     if (!r || !r.online) return 'offline';
     if (r.value === undefined) return 'neutral';
-    return readingStatus(kind, r.value, profile, { isPhotoperiod: input.isPhotoperiod });
+    return readingStatus(kind, r.value, profile, { isLightPeriod: light.isLightPeriod, temperature });
   };
   const value = (kind: SensorKind) => (readings[kind]?.online ? readings[kind]?.value : undefined);
   const show = (kind: SensorKind) => formatReading(kind, value(kind));
@@ -130,7 +158,7 @@ export function buildTwinState(input: TwinInput): TwinState {
       label: 'Clima del galpón',
       status: climateStatus,
       value: `${show('temperature')} · ${show('humidity')}`,
-      detail: `Óptimo ${t.min}–${t.max} °C y ${h.min}–${h.max} % de humedad`,
+      detail: `${outside ? `Exterior ${Math.round(outside.temperature)} °C · ` : ''}Óptimo ${t.min}–${t.max} °C y ${h.min}–${h.max} % de humedad`,
       sensorKind: 'temperature',
     },
     {
@@ -162,7 +190,7 @@ export function buildTwinState(input: TwinInput): TwinState {
       label: 'Aves',
       status: withAlert('hens', sensorStatus('animalActivity')),
       value: `Actividad ${show('animalActivity')}`,
-      detail: input.isPhotoperiod ? 'Periodo de luz: se espera movimiento' : 'Periodo de descanso',
+      detail: light.isLightPeriod ? 'De día: se espera movimiento' : 'De noche: las aves duermen',
       sensorKind: 'animalActivity',
     },
     {
@@ -170,13 +198,38 @@ export function buildTwinState(input: TwinInput): TwinState {
       label: 'Iluminación',
       status: withAlert('lighting', sensorStatus('light')),
       value: `${on('lighting') ? 'Encendida' : 'Apagada'} · ${show('light')}`,
-      detail: `Fotoperiodo ${profile.control.photoperiod.startHour}:00 – ${profile.control.photoperiod.endHour}:00`,
+      detail:
+        input.lighting.type === 'natural'
+          ? `Luz natural${light.sun ? ` · amanece ${formatClock(light.sun.sunrise)} · anochece ${formatClock(light.sun.sunset)}` : ''}`
+          : `Programa de luz ${input.lighting.startHour}:00 – ${input.lighting.endHour}:00`,
       sensorKind: 'light',
     },
   ];
 
+  // Lo que "sienten" las aves (usa el mismo criterio que las alertas del perfil).
+  const humidity = readings.humidity?.online ? readings.humidity.value : undefined;
+  const comfortMax = profile.comfort.temperature.max;
+  const heatSpan = profile.alerts.highTemperature.critical - comfortMax;
+  const humidityFactor = 1 + Math.max(0, (humidity ?? 60) - 60) / 100;
+  const heatStress = temperature === undefined ? 0 : clamp01(((temperature - comfortMax) / heatSpan) * humidityFactor);
+  const cold = temperature === undefined ? 0 : clamp01((profile.comfort.temperature.min - temperature) / 8);
+  const waterAvailable = waterLevel === undefined || waterLevel > 5;
+  const feedAvailable = feedLevel === undefined || feedLevel > 5;
+  const expectedActive = light.isLightPeriod && heatStress < 0.3 && waterAvailable && feedAvailable;
+  const warnActivity = profile.alerts.lowActivity.warning;
+  const sickness =
+    expectedActive && activityValue !== undefined && activityValue < warnActivity
+      ? clamp01((warnActivity - activityValue) / warnActivity + 0.3)
+      : 0;
+  const raining = outside ? isRaining(outside.weatherCode, outside.precipitation) : false;
+
   return {
-    daylight,
+    daylight: light.natural,
+    sun: { elevation: light.sunElevation, azimuth: light.sunAzimuth },
+    twilight: clamp01(1 - Math.abs(light.sunElevation) / 7),
+    cloudCover: outside ? clamp01(outside.cloudCover / 100) : 0.2,
+    rain: raining ? clamp01(0.3 + (outside?.precipitation ?? 0) / 4) : 0,
+    flock: { heatStress, cold, sickness, waterAvailable, feedAvailable },
     lampsOn: on('lighting'),
     fanActive: on('ventilation'),
     feederActive: on('feeder'),
@@ -184,7 +237,7 @@ export function buildTwinState(input: TwinInput): TwinState {
     feedLevel: feedLevel === undefined ? null : feedLevel / 100,
     waterLevel: waterLevel === undefined ? null : waterLevel / 100,
     activity: activityValue === undefined ? 0.5 : Math.min(1, Math.max(0, activityValue / 100)),
-    resting: !input.isPhotoperiod,
+    resting: !light.isLightPeriod,
     climateStatus,
     sensors: (Object.keys(SENSOR_KINDS) as SensorKind[]).map((kind) => ({
       kind,
@@ -193,5 +246,18 @@ export function buildTwinState(input: TwinInput): TwinState {
     })),
     elements,
     alerts,
+  };
+}
+
+/** Lo que perciben las aves en el gemelo: luz (sol o lámparas), calor, frío, salud y recursos. */
+export function behaviorWorldFor(twin: TwinState): BehaviorWorld {
+  return {
+    light: Math.max(twin.daylight, twin.lampsOn ? 1 : 0),
+    heatStress: twin.flock.heatStress,
+    cold: twin.flock.cold,
+    sickness: twin.flock.sickness,
+    waterAvailable: twin.flock.waterAvailable,
+    feedAvailable: twin.flock.feedAvailable,
+    fanActive: twin.fanActive,
   };
 }

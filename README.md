@@ -8,7 +8,7 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
 **Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-## Estado actual (fases 0–5)
+## Estado actual (fases 0–6)
 
 | Módulo | Estado |
 |---|---|
@@ -21,10 +21,12 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | Modo demo (ola de calor, falta de agua o alimento, baja actividad, sensor caído) | ✅ |
 | Historial y gráficas por sensor (bandas de umbral, franjas de equipos, cursor, tabla por hora, minigráficas) | ✅ |
 | Gemelo digital 3D funcional (galpón, aves, equipos y sensores reaccionan a los datos) | ✅ |
-| Módulo de producción + configuración | Fase 6 — siguiente |
-| Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 7–10 |
+| Mundo real: Valledupar, sol calculado localmente, clima real de Open-Meteo, modos en vivo/acelerado | ✅ |
+| Gallinas con IA de NPC (utilidad + steering): duermen al ocultarse el sol, jadean con calor, se agolpan sin agua… | ✅ |
+| Módulo de producción + configuración | Fase 7 — siguiente |
+| Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 8–11 |
 
-Sin hardware todavía: toda la app funciona sobre la simulación, que arranca con 24 h de historia previa.
+Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de Valledupar (Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia generada con el clima real de ayer.
 
 ## Comandos
 
@@ -41,12 +43,13 @@ npm run lint          # ESLint
 ```
 src/
 ├── app/              # Rutas (Expo Router): solo re-exportan pantallas
-├── domain/           # Tipos, perfiles de especie, catálogo, visión (futuro). TS puro
+├── domain/           # Tipos, perfiles, sol, programas de luz, comportamiento animal, visión (futuro). TS puro
 ├── engine/           # Motor de reglas, alertas, contexto. TS puro
 ├── services/
 │   ├── telemetry/    # Interfaz TelemetrySource (frontera con el hardware)
 │   ├── simulation/   # SimulatedSource + modelo físico + escenarios demo
 │   ├── history/      # HistoryRepository (historial) + analítica del periodo
+│   ├── weather/      # Clima real (Open-Meteo) + respaldo sintético
 │   └── runtime/      # FarmRuntime: orquesta fuente → motor → store
 ├── store/            # Estado global (Zustand) y selectores
 ├── features/         # Pantallas por módulo (dashboard, twin, sensors, alerts, automation, demo)

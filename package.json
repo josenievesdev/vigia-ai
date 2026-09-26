@@ -59,6 +59,7 @@
     "preset": "jest-expo",
     "testPathIgnorePatterns": [
       "/node_modules/"
-    ]
+    ],
+    "globalSetup": "<rootDir>/jest.global-setup.js"
   }
 }

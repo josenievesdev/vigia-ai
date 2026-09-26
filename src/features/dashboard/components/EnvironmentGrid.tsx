@@ -20,29 +20,54 @@ const TREND_WINDOW_MS = 3 * 3600_000;
 interface EnvironmentGridProps {
   zoneId: string;
   profile: SpeciesProfile;
-  isPhotoperiod: boolean;
+  isLightPeriod: boolean;
+  /** true si la luz actual viene de las lámparas (no del sol). */
+  artificialLight: boolean;
 }
 
-export function EnvironmentGrid({ zoneId, profile, isPhotoperiod }: EnvironmentGridProps) {
+export function EnvironmentGrid({ zoneId, profile, isLightPeriod, artificialLight }: EnvironmentGridProps) {
+  const temperature = useReading(zoneId, 'temperature').value;
   return (
     <View style={styles.grid}>
       {KINDS.map((kind) => (
-        <SensorTile key={kind} zoneId={zoneId} kind={kind} profile={profile} isPhotoperiod={isPhotoperiod} />
+        <SensorTile
+          key={kind}
+          zoneId={zoneId}
+          kind={kind}
+          profile={profile}
+          isLightPeriod={isLightPeriod}
+          artificialLight={artificialLight}
+          temperature={temperature}
+        />
       ))}
     </View>
   );
 }
 
-function hintFor(kind: SensorKind, profile: SpeciesProfile, isPhotoperiod: boolean): string {
+interface HintContext {
+  profile: SpeciesProfile;
+  isLightPeriod: boolean;
+  artificialLight: boolean;
+  value: number | undefined;
+  temperature: number | undefined;
+}
+
+function hintFor(kind: SensorKind, ctx: HintContext): string {
+  const { profile, isLightPeriod } = ctx;
   switch (kind) {
     case 'temperature':
       return `Óptimo ${profile.comfort.temperature.min}–${profile.comfort.temperature.max} °C`;
-    case 'humidity':
+    case 'humidity': {
+      const humid = ctx.value !== undefined && ctx.value >= profile.alerts.highHumidity.warning;
+      const cool = ctx.temperature !== undefined && ctx.temperature < profile.alerts.highHumidityMinTemperature;
+      if (humid && cool) return 'Alta, sin calor: sin riesgo agudo';
       return `Óptimo ${profile.comfort.humidity.min}–${profile.comfort.humidity.max} %`;
+    }
     case 'light':
-      return isPhotoperiod ? 'Fotoperiodo activo' : 'Periodo de descanso';
+      if (!isLightPeriod) return 'Noche';
+      return ctx.artificialLight ? 'Luz artificial' : 'Luz natural';
     case 'animalActivity':
-      return isPhotoperiod ? 'Movimiento de las aves' : 'Aves en reposo';
+      return isLightPeriod ? 'Movimiento de las aves' : 'Aves en reposo';
     default:
       return '';
   }
@@ -52,18 +77,22 @@ function SensorTile({
   zoneId,
   kind,
   profile,
-  isPhotoperiod,
+  isLightPeriod,
+  artificialLight,
+  temperature,
 }: {
   zoneId: string;
   kind: SensorKind;
   profile: SpeciesProfile;
-  isPhotoperiod: boolean;
+  isLightPeriod: boolean;
+  artificialLight: boolean;
+  temperature: number | undefined;
 }) {
   const reading = useReading(zoneId, kind);
   const trend = useSensorHistory(zoneId, kind, TREND_WINDOW_MS).points;
   const { value, online } = reading;
   const info = SENSOR_KINDS[kind];
-  const tone = readingTone(kind, reading, profile, { isPhotoperiod });
+  const tone = readingTone(kind, reading, profile, { isLightPeriod, temperature });
 
   return (
     <MetricTile
@@ -72,7 +101,7 @@ function SensorTile({
       value={online ? formatValue(kind, value) : '—'}
       unit={info.unit}
       tone={tone}
-      hint={online ? hintFor(kind, profile, isPhotoperiod) : 'Sensor desconectado'}
+      hint={online ? hintFor(kind, { profile, isLightPeriod, artificialLight, value, temperature }) : 'Sensor desconectado'}
       trend={trend}
       onPress={() => router.push({ pathname: '/sensor/[kind]', params: { kind } })}
     />

@@ -1,3 +1,4 @@
+import type { BehaviorLayout } from '@/domain/behavior/types';
 import type { SensorKind } from '@/domain/types';
 
 import type { TwinElementId } from '../twinState';
@@ -30,6 +31,22 @@ export const LAMP_Y = 2.45;
 
 /** Figuras de aves en escena (representan a toda la población del galpón). */
 export const HEN_FIGURES = 24;
+
+/** Perchas para dormir, a lo largo de los muros laterales. */
+export const PERCH = { z: 2.02, y: 0.42, minX: -5.2, maxX: 5.2 } as const;
+const PERCH_SLOTS = HEN_FIGURES / 2;
+
+/** Anclas del comportamiento de las aves (dónde comen, beben, duermen y se refrescan). */
+export const HEN_LAYOUT: BehaviorLayout = {
+  bounds: { minX: -5.6, maxX: 5.6, minZ: -PERCH.z, maxZ: PERCH.z },
+  feeder: { z: FEEDER_Z, minX: -4.8, maxX: 4.8, side: 1 },
+  water: { z: WATER_Z, minX: -4.8, maxX: 4.8, side: -1 },
+  perches: Array.from({ length: HEN_FIGURES }, (_, i) => ({
+    x: PERCH.minX + ((i % PERCH_SLOTS) + 0.5) * ((PERCH.maxX - PERCH.minX) / PERCH_SLOTS),
+    z: i < PERCH_SLOTS ? -PERCH.z : PERCH.z,
+  })),
+  coolSpot: { x: BARN.length / 2 - 1.1, z: 0 },
+};
 
 export const SENSOR_POSITIONS: Record<SensorKind, Vec3> = {
   temperature: [0, 1.55, -2.42],

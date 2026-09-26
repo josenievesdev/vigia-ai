@@ -2,7 +2,9 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { AppText, Badge, Card, EmptyState, Screen, SectionHeader } from '@/components/ui';
 import { AlertCard } from '@/features/alerts/components/AlertCard';
+import { formatLocation } from '@/domain/location';
 import { DecisionItem } from '@/features/automation/components/DecisionItem';
+import { OutsideCard } from '@/features/environment/OutsideCard';
 import { useFarmClock } from '@/hooks/use-farm-clock';
 import { useFarmStore } from '@/store/useFarmStore';
 import { useActuators, useHealth, usePrimaryZone } from '@/store/selectors';
@@ -24,7 +26,7 @@ export function DashboardScreen() {
   const zone = usePrimaryZone();
   const actuators = useActuators(zone?.id);
   const health = useHealth();
-  const { now, isPhotoperiod } = useFarmClock();
+  const { now, light, isLightPeriod } = useFarmClock();
 
   if (!farm || !profile || !zone || now === null) {
     return (
@@ -40,7 +42,7 @@ export function DashboardScreen() {
   return (
     <Screen
       title={farm.name}
-      subtitle={`${zone.name} · ${zone.population.toLocaleString('es')} ${profile.populationNoun}`}
+      subtitle={`${formatLocation(farm.location)} · ${zone.name} · ${zone.population.toLocaleString('es')} ${profile.populationNoun}`}
       headerRight={
         <Badge
           label={sourceKind === 'simulation' ? 'Simulación' : 'En vivo'}
@@ -50,10 +52,16 @@ export function DashboardScreen() {
       }>
       <DemoBanner />
       <HealthBanner health={health} alertCount={alerts.length} clock={formatClock(now)} />
+      <OutsideCard />
 
       <View style={styles.section}>
         <SectionHeader title="Ambiente" />
-        <EnvironmentGrid zoneId={zone.id} profile={profile} isPhotoperiod={isPhotoperiod} />
+        <EnvironmentGrid
+          zoneId={zone.id}
+          profile={profile}
+          isLightPeriod={isLightPeriod}
+          artificialLight={Boolean(light?.artificialWanted)}
+        />
       </View>
 
       <SuppliesCard zoneId={zone.id} profile={profile} actuators={actuators} />

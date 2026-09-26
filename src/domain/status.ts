@@ -81,7 +81,7 @@ export function readingStatus(
   kind: SensorKind,
   value: number,
   profile: SpeciesProfile,
-  opts: { isPhotoperiod?: boolean } = {},
+  opts: { isLightPeriod?: boolean; temperature?: number } = {},
 ): HealthStatus {
   const a = profile.alerts;
   switch (kind) {
@@ -90,13 +90,15 @@ export function readingStatus(
       return high !== 'normal' ? high : bandStatus(value, a.lowTemperature, 'below');
     }
     case 'humidity':
+      // Sin calor, la humedad alta no es un riesgo agudo (mismo criterio que la alerta).
+      if (opts.temperature !== undefined && opts.temperature < a.highHumidityMinTemperature) return 'normal';
       return bandStatus(value, a.highHumidity, 'above');
     case 'waterLevel':
       return bandStatus(value, a.lowWater, 'below');
     case 'feedLevel':
       return bandStatus(value, a.lowFeed, 'below');
     case 'animalActivity':
-      return opts.isPhotoperiod === false ? 'normal' : bandStatus(value, a.lowActivity, 'below');
+      return opts.isLightPeriod === false ? 'normal' : bandStatus(value, a.lowActivity, 'below');
     default:
       return 'normal';
   }

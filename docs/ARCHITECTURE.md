@@ -131,7 +131,42 @@ Representación funcional (no un videojuego): todo lo que se ve se deriva del es
   - simulación en Node de la carga del módulo nativo.
   - La prueba final es en un teléfono con Expo Go, porque los simuladores de iOS no son fiables para OpenGL.
 
-## 9. Modo demo
+## 9. Mundo real (fase 6)
+
+La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altitud y zona horaria).
+
+- **Sol real, sin red:** `domain/solar.ts` implementa las ecuaciones de la NOAA (posición del sol, salida y puesta, crepúsculo civil). Coincide con Open-Meteo con un margen de ±2 min.
+- **Programa de luz** (`domain/lighting.ts`), por galpón:
+  - `natural` (por defecto): las aves duermen al oscurecer;
+  - `extended`: lámparas que completan la luz que falta dentro de una ventana horaria.
+  - `lightState()` da el periodo de luz de las aves, lo usan el motor, la simulación, la UI y el gemelo, y reemplaza al fotoperiodo fijo.
+- **Clima real** (`services/weather`):
+  - `WeatherService` descarga de Open-Meteo la observación actual, las últimas 24 h y 48 h de pronóstico. Se refresca cada 15 min y se interpola entre horas.
+  - Sin conexión, o fuera del rango de datos, usa un clima sintético de respaldo sin romper la app.
+- **Modelo del galpón alimentado por el exterior real.**
+  - Interior = temperatura exterior + calor de las aves + sol sobre el techo − ventilación.
+  - Humedad = la exterior corregida por temperatura, más la respiración de las aves.
+  - Luz = radiación solar real + lámparas.
+  - **Lo real es el exterior; el interior sigue siendo un modelo hasta tener sensores.**
+- **Humedad con criterio agronómico:** solo se alerta de humedad alta cuando coincide con calor (≥ 28 °C), porque es entonces cuando agrava el estrés térmico. Así las noches húmedas de Valledupar no generan falsas alarmas.
+- **Modos de simulación** (pestaña Demo):
+  - **En vivo:** reloj y clima reales.
+  - **Acelerado:** para presentaciones, recorre el pronóstico real a 1, 5 o 15 min/s.
+  - Cambiar de modo reinicia la simulación con 24 h de historia generada con el clima real.
+- **Comportamiento de las aves** (`domain/behavior`, puro y con pruebas):
+  - **Técnica:** IA de NPC de videojuegos. La **IA de utilidad** puntúa acciones según las necesidades (hambre, sed, energía), el ambiente (luz, estrés térmico con agravante de humedad, frío, disponibilidad de agua y alimento) y el decaimiento. Los **comportamientos de dirección** (llegada suave y separación entre aves) mueven a cada una.
+  - **Acciones:** dormir en la percha, reposar, explorar, comer, beber, acicalarse, baño de tierra, jadear, amontonarse, agitarse y decaer.
+  - **En el gemelo:** cada acción tiene su postura (pico abierto y alas separadas con calor, aleteo con agitación, plumas esponjadas con frío, cabeza recogida al dormir). El panel "Qué están haciendo las aves" lo resume en texto.
+  - **Visión futura:** estos patrones son los mismos que definió el contrato de visión artificial (aglomeración, jadeo, inmovilidad), así que la cámara podrá validarlos con datos reales.
+- **Gemelo 3D:**
+  - el sol ilumina desde su posición real;
+  - el cielo se tiñe al amanecer y al atardecer;
+  - las nubes oscurecen la escena;
+  - la lluvia real se dibuja;
+  - un recuadro muestra ciudad, clima, hora y la próxima salida o puesta del sol.
+- **Licencia de Open-Meteo:** el plan gratuito es **solo no comercial** y exige atribución (CC BY 4.0, visible en la app). Antes de comercializar hay que contratar su plan pago o consultar desde el servidor propio (fase 9).
+
+## 10. Modo demo
 
 `src/services/simulation/scenarios.ts` define los escenarios:
 - ola de calor
@@ -142,9 +177,9 @@ Representación funcional (no un videojuego): todo lo que se ve se deriva del es
 
 Los escenarios **modifican el modelo físico**, no los números que se muestran. Lo que se ve en pantalla es la respuesta real del motor. La velocidad de la simulación es configurable (tiempo real, 1 min/s o 5 min/s).
 
-**Mientras no haya hardware, todo funciona en simulación**, incluido el gemelo 3D (fase 5) y el módulo de producción (fase 6).
+**Mientras no haya hardware**, el interior del galpón se simula, pero con el clima y el sol reales de la ubicación (fase 6).
 
-## 10. Preparación para hardware (fase 7, no implementado)
+## 11. Preparación para hardware (fase 8, no implementado)
 
 Los IDs ya tienen la forma necesaria para mapearse a tópicos MQTT:
 
@@ -162,7 +197,7 @@ Plan:
 
 **Decisión clave:** el control crítico (ventilación, agua) no puede depender de que el teléfono esté encendido. El ESP32 o un gateway tendrá un control básico de seguridad con umbrales locales, y el motor completo correrá en el servidor. La app supervisará y dará órdenes. El motor ya es TypeScript puro para poder moverlo sin reescribirlo.
 
-## 11. Backend (fase 8, no implementado)
+## 12. Backend (fase 9, no implementado)
 
 Supabase o Firebase para:
 - autenticación
@@ -174,7 +209,7 @@ Supabase o Firebase para:
 
 La configuración de la granja que hoy está en `demoFarm.ts` pasará a venir de la base de datos.
 
-## 12. Visión artificial (fase 10, no implementada)
+## 13. Visión artificial (fase 11, no implementada)
 
 Contrato previsto en `src/domain/vision/types.ts`:
 - **Detección de movimiento:** índice de movimiento por zona.
@@ -184,7 +219,7 @@ Contrato previsto en `src/domain/vision/types.ts`:
 
 El análisis de video se hará en un gateway local o en la nube, no en el teléfono. La app recibirá `VisionEvent`/`VisionInsights`, que se añadirán al `ZoneContext`, para que las reglas o la IA combinen visión y sensores (por ejemplo: baja actividad + aglomeración + temperatura alta → estrés térmico). El tipo de alerta `abnormalBehavior` ya está reservado.
 
-## 13. Hoja de ruta
+## 14. Hoja de ruta
 
 ### Bloque A: app completa sin hardware (todo simulado)
 | Fase | Contenido | Estado |
@@ -194,25 +229,26 @@ El análisis de video se hará en un gateway local o en la nube, no en el teléf
 | 2 | Dashboard | ✅ |
 | 3 | Motor de reglas + alertas + modo demo | ✅ |
 | 4 | Historial y gráficas (detalle por sensor, bandas, franjas de equipos, minigráficas, tabla por hora) | ✅ |
-| 5 | Gemelo digital 3D, representación funcional alimentada por la simulación | ✅ (validar en teléfono) |
-| 6 | **Módulo de producción** + configuración (umbrales editables, datos de granja y galpones) | ⏭️ Siguiente |
+| 5 | Gemelo digital 3D, representación funcional alimentada por la simulación | ✅ |
+| 6 | **Mundo real**: ubicación (Valledupar), sol y clima reales (Open-Meteo), gallinas con IA de NPC | ✅ (validar en teléfono) |
+| 7 | **Módulo de producción** + configuración (umbrales editables, programa de luz, ubicación y galpones) | ⏭️ Siguiente |
 
-**Módulo de producción (fase 6):**
+**Módulo de producción (fase 7):**
 - huevos por día y % de postura
 - mortalidad
 - consumo de alimento y de agua por ave
 - conversión alimenticia
 
-Al principio los datos serán simulados, afectados por el estrés térmico, la disponibilidad de agua y alimento y las horas de luz. Después se sumará el registro manual y más adelante el conteo automático.
+Al principio los datos serán simulados, afectados por el estrés térmico real, la disponibilidad de agua y alimento y las horas de luz reales (luz natural frente a programa de 16 h). Después se sumará el registro manual y más adelante el conteo automático.
 
 ### Bloque B: granja real (piloto)
 | Fase | Contenido | Estado |
 |---|---|---|
-| 7 | Hardware: ESP32 + sensores + relés vía MQTT; control de seguridad local | Pendiente (sin hardware aún) |
-| 8 | Servidor: usuarios, historial persistente, push, multi-granja, motor en servidor | Pendiente |
+| 8 | Hardware: ESP32 + sensores + relés vía MQTT; control de seguridad local | Pendiente (sin hardware aún) |
+| 9 | Servidor: usuarios, historial persistente, push, multi-granja, motor en servidor, proxy de clima con licencia comercial | Pendiente |
 
 ### Bloque C: inteligencia
 | Fase | Contenido | Estado |
 |---|---|---|
-| 9 | IA de decisiones: predicciones, anomalías de consumo, recomendaciones explicadas | Pendiente |
-| 10 | Visión artificial: movimiento, comportamiento anormal, conteo | Pendiente |
+| 10 | IA de decisiones: predicciones (p. ej. pre-ventilar según el pronóstico real), anomalías de consumo, recomendaciones explicadas | Pendiente |
+| 11 | Visión artificial: movimiento, comportamiento anormal, conteo | Pendiente |

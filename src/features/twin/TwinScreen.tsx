@@ -4,12 +4,14 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import type { FlockAction } from '@/domain/behavior/types';
 import { AppText, Badge, Icon } from '@/components/ui';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useFarmStore } from '@/store/useFarmStore';
 import { Radius, Spacing, toneColors, useTheme } from '@/theme';
-import { formatClock } from '@/utils/format';
 
+import { FlockSummary } from './components/FlockSummary';
+import { LocationOverlay } from './components/LocationOverlay';
 import { STATUS_LABEL, TwinPanel } from './components/TwinPanel';
 import { ELEMENT_FOCUS, HEN_FIGURES, VIEWS, type ViewId } from './scene/layout';
 import type { TwinElementId, TwinStatus } from './twinState';
@@ -29,9 +31,9 @@ export function TwinScreen() {
   const focused = useIsFocused();
   const [view, setView] = useState<ViewId>('general');
   const [selected, setSelected] = useState<TwinElementId | null>(null);
+  const [flockCounts, setFlockCounts] = useState<Record<FlockAction, number> | null>(null);
   const twin = useTwinState();
   const zone = useFarmStore((s) => s.farm?.zones[0]);
-  const now = useFarmStore((s) => s.now);
 
   const chooseView = (id: ViewId) => {
     setSelected(null);
@@ -46,7 +48,7 @@ export function TwinScreen() {
         <View style={styles.flex}>
           <AppText variant="title">Gemelo digital</AppText>
           <AppText muted>
-            {zone?.name ?? 'Galpón'} · vista en tiempo real{now !== null ? ` · ${formatClock(now)}` : ''}
+            {zone?.name ?? 'Galpón'} · representación en tiempo real
           </AppText>
         </View>
       </View>
@@ -88,19 +90,15 @@ export function TwinScreen() {
                 colors={c}
                 scheme={scheme}
                 active={focused}
+                onFlockSummary={setFlockCounts}
               />
             </Suspense>
           </ErrorBoundary>
         ) : (
           <Loading />
         )}
-        <View pointerEvents="none" style={[styles.overlay, styles.hint, { backgroundColor: c.surface }]}>
-          <Icon name="gesture-tap" size={14} color={c.textMuted} />
-          <AppText variant="caption" muted>
-            Toca un elemento · arrastra para girar
-          </AppText>
-        </View>
-        <View pointerEvents="none" style={[styles.overlay, styles.legend, { backgroundColor: c.surface }]}>
+        <LocationOverlay />
+        <View style={[styles.overlay, styles.legend, { backgroundColor: c.surface }]}>
           {LEGEND.map((status) => (
             <View key={status} style={styles.legendItem}>
               <View style={[styles.dot, { backgroundColor: toneColors(c, status).fg }]} />
@@ -116,6 +114,13 @@ export function TwinScreen() {
       </View>
 
       <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
+        <View style={styles.hint}>
+          <Icon name="gesture-tap" size={14} color={c.textMuted} />
+          <AppText variant="caption" muted>
+            Toca un elemento en el 3D o en la lista · arrastra para girar
+          </AppText>
+        </View>
+        <FlockSummary counts={flockCounts} />
         {twin ? (
           <TwinPanel elements={twin.elements} selected={selected} onSelect={setSelected} />
         ) : null}
@@ -177,6 +182,7 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.lg },
   center: { textAlign: 'center' },
   overlay: {
+    pointerEvents: 'none',
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
@@ -186,7 +192,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     opacity: 0.92,
   },
-  hint: { top: Spacing.sm, left: Spacing.sm },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs + 2 },
   legend: { bottom: Spacing.sm, left: Spacing.sm, right: Spacing.sm, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dot: { width: 8, height: 8, borderRadius: 4 },

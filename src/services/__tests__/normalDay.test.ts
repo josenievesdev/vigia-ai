@@ -29,6 +29,7 @@ describe('día normal', () => {
 
     expect([...seen]).toEqual([]);
     const rules = new Set(farmStore.getState().decisions.map((d) => d.ruleId));
-    expect(rules).toEqual(new Set(['control.lighting', 'control.ventilation', 'control.feeder', 'control.waterPump']));
+    // Luz natural: no hay decisiones de iluminación.
+    expect(rules).toEqual(new Set(['control.ventilation', 'control.feeder', 'control.waterPump']));
   });
 });

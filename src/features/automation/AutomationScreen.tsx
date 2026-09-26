@@ -16,7 +16,6 @@ export function AutomationScreen() {
   const actuators = useActuators(zone?.id);
   const decisions = useFarmStore((s) => s.decisions);
   const now = useFarmStore((s) => s.now) ?? 0;
-  const runtime = getFarmRuntime();
 
   return (
     <Screen title="Automatización" subtitle={zone ? `Equipos de ${zone.name}` : undefined}>
@@ -26,8 +25,8 @@ export function AutomationScreen() {
           <View key={a.id} style={i > 0 && [styles.divider, { borderTopColor: c.border }]}>
             <ActuatorControl
               actuator={a}
-              onToggle={(active) => void runtime.setManual(a.id, active)}
-              onAuto={() => runtime.setAuto(a.id)}
+              onToggle={(active) => void getFarmRuntime().setManual(a.id, active)}
+              onAuto={() => getFarmRuntime().setAuto(a.id)}
             />
           </View>
         ))}

@@ -5,7 +5,7 @@ import type { MeshBasicMaterial } from 'three';
 import type { ColorTokens } from '@/theme';
 
 import type { TwinStatus } from '../twinState';
-import { BARN, PALETTE } from './layout';
+import { BARN, PALETTE, PERCH } from './layout';
 import { noRaycast, type SelectHandler, tapHandler } from './shared';
 
 const HALF_L = BARN.length / 2;
@@ -49,6 +49,21 @@ export function Barn({ climateStatus, colors, onSelect }: BarnProps) {
           <boxGeometry args={[0.1, BARN.eave, BARN.width + 0.2]} />
           <meshStandardMaterial color={PALETTE.wall} />
         </mesh>
+        {/* Perchas para dormir */}
+        {[-1, 1].map((side) => (
+          <group key={`perch-${side}`}>
+            <mesh position={[0, PERCH.y, side * PERCH.z]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.035, 0.035, PERCH.maxX - PERCH.minX + 0.4, 8]} />
+              <meshStandardMaterial color={PALETTE.wood} />
+            </mesh>
+            {[-5, 0, 5].map((x) => (
+              <mesh key={x} position={[x, PERCH.y / 2, side * PERCH.z]}>
+                <boxGeometry args={[0.05, PERCH.y, 0.05]} />
+                <meshStandardMaterial color={PALETTE.wood} />
+              </mesh>
+            ))}
+          </group>
+        ))}
         {/* Postes */}
         {POST_XS.flatMap((x) =>
           [-1, 1].map((side) => (

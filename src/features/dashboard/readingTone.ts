@@ -8,7 +8,7 @@ export function readingTone(
   kind: SensorKind,
   reading: { value: number | undefined; online: boolean },
   profile: SpeciesProfile,
-  opts?: { isPhotoperiod?: boolean },
+  opts?: { isLightPeriod?: boolean; temperature?: number },
 ): Tone {
   if (!reading.online) return 'offline';
   if (reading.value === undefined) return 'neutral';

@@ -1,13 +1,14 @@
 import type { SpeciesProfile } from '@/domain/profiles';
-import { hourOfDay } from '@/domain/time';
 import type { ActuatorKind, Timestamp } from '@/domain/types';
-
+import type { OutsideConditions, WeatherProvider } from '@/services/weather/types';
 import { noise, type Rng } from '@/utils/random';
+
 import type { ScenarioId } from './scenarios';
 
 /**
- * Modelo físico simplificado de un galpón. Funciones puras: dado un estado,
- * los actuadores y los escenarios activos, calcula el estado siguiente.
+ * Modelo físico simplificado de un galpón abierto. Funciones puras: dado un
+ * estado, el clima exterior (real o sintético), los actuadores y los escenarios
+ * activos, calcula el estado siguiente del interior.
  */
 
 export interface EnvironmentState {
@@ -42,6 +43,17 @@ export const initialEnvironment: EnvironmentState = {
 
 /** Paso máximo de integración para mantener estable el modelo. */
 const MAX_STEP_SECONDS = 30;
+/** Calentamiento del interior por el sol sobre el techo, °C a 1000 W/m². */
+const SOLAR_GAIN = 2.5;
+/** Enfriamiento de la ventilación forzada, °C. */
+const VENTILATION_COOLING = 5;
+/** Escenario demo "ola de calor": grados extra sobre el clima exterior. */
+const HEAT_WAVE_EXTRA = 11;
+/** Iluminancia interior por W/m² de radiación exterior (galpón abierto y techado). */
+const LUX_PER_WM2 = 1.2;
+const LAMP_LUX = 60;
+/** Por debajo de esta iluminancia las aves se comportan como de noche. */
+const DARK_LUX = 20;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -49,42 +61,35 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 const approach = (current: number, target: number, dt: number, tau: number) =>
   current + (target - current) * (1 - Math.exp(-dt / tau));
 
-/** Temperatura exterior: ciclo diario con mínimo ~3 a. m. y máximo ~3 p. m. */
-export function outsideTemperature(hour: number, scenarios: ReadonlySet<ScenarioId>): number {
-  const base = 22 + 6 * Math.sin((2 * Math.PI * (hour - 9)) / 24);
-  return base + (scenarios.has('heatWave') ? 11 : 0);
-}
-
-function daylight(hour: number): number {
-  return Math.max(0, Math.sin((Math.PI * (hour - 6)) / 12)) * 250;
-}
-
 function step(
   s: EnvironmentState,
-  time: Timestamp,
   dt: number,
+  outside: OutsideConditions,
   actuators: ActuatorFlags,
   scenarios: ReadonlySet<ScenarioId>,
   profile: SpeciesProfile,
   params: ZoneModelParams,
   rng: Rng,
 ): EnvironmentState {
-  const hour = hourOfDay(time);
   const activityFactor = s.animalActivity / 100;
+  const outsideTemp = outside.temperature + (scenarios.has('heatWave') ? HEAT_WAVE_EXTRA : 0);
 
-  // Temperatura: exterior + calor animal − ventilación.
+  // Temperatura: exterior + calor de las aves + sol en el techo − ventilación.
   const animalHeat = 1 + 2.5 * activityFactor;
-  const cooling = actuators.ventilation ? 5 : 0;
-  const tempTarget = outsideTemperature(hour, scenarios) + animalHeat - cooling;
+  const solarGain = (Math.max(0, outside.radiation) / 1000) * SOLAR_GAIN;
+  const cooling = actuators.ventilation ? VENTILATION_COOLING : 0;
+  const tempTarget = outsideTemp + animalHeat + solarGain - cooling;
   const temperature = approach(s.temperature, tempTarget, dt, 20 * 60) + noise(rng, 0.02);
 
-  // Humedad: baja con el calor y con la renovación de aire.
-  const humidityTarget = 66 - (temperature - 22) * 1.5 - (actuators.ventilation ? 8 : 0);
+  // Humedad: la del exterior, corregida por la diferencia de temperatura (aire más
+  // caliente = menor humedad relativa) más la respiración de las aves.
+  const humidityTarget =
+    outside.humidity * Math.exp(-0.06 * (temperature - outsideTemp)) + (actuators.ventilation ? 1 : 4);
   const humidity = clamp(approach(s.humidity, humidityTarget, dt, 30 * 60) + noise(rng, 0.05), 15, 98);
 
-  // Luz: natural + artificial.
-  const light = daylight(hour) + (actuators.lighting ? 120 : 0);
-  const lit = light > 60;
+  // Luz: radiación solar real + lámparas.
+  const light = Math.max(0, outside.radiation) * LUX_PER_WM2 + (actuators.lighting ? LAMP_LUX : 0);
+  const lit = light > DARK_LUX;
 
   // Actividad: depende de luz, estrés térmico y disponibilidad de agua/alimento.
   let activityTarget = lit ? 75 : 12;
@@ -110,7 +115,7 @@ function step(
 
   // Alimento: se consume durante el periodo de luz.
   const feedUseKps = lit
-    ? ((params.population * profile.consumption.feedKgPerDay) / (16 * 3600)) * (0.5 + 0.5 * activityFactor)
+    ? ((params.population * profile.consumption.feedKgPerDay) / (12 * 3600)) * (0.5 + 0.5 * activityFactor)
     : 0;
   const feederKps = actuators.feeder && !scenarios.has('feedShortage') ? params.feederKgPerHour / 3600 : 0;
   const feedLevel = clamp(s.feedLevel + ((feederKps - feedUseKps) * dt * 100) / params.hopperKg, 0, 100);
@@ -118,7 +123,7 @@ function step(
   return { temperature, humidity, light, waterLevel, feedLevel, animalActivity };
 }
 
-/** Avanza el modelo `dtSeconds`, subdividiendo en pasos pequeños. */
+/** Avanza el modelo `dtSeconds`, subdividiendo en pasos pequeños con el clima de cada instante. */
 export function advanceEnvironment(
   state: EnvironmentState,
   startTime: Timestamp,
@@ -127,13 +132,15 @@ export function advanceEnvironment(
   scenarios: ReadonlySet<ScenarioId>,
   profile: SpeciesProfile,
   params: ZoneModelParams,
+  weather: WeatherProvider,
   rng: Rng,
 ): EnvironmentState {
   let s = state;
   let elapsed = 0;
   while (elapsed < dtSeconds) {
     const dt = Math.min(MAX_STEP_SECONDS, dtSeconds - elapsed);
-    s = step(s, startTime + elapsed * 1000, dt, actuators, scenarios, profile, params, rng);
+    const outside = weather.conditionsAt(startTime + elapsed * 1000);
+    s = step(s, dt, outside, actuators, scenarios, profile, params, rng);
     elapsed += dt;
   }
   return s;

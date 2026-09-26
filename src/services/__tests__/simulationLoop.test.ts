@@ -7,16 +7,25 @@ import { selectReading } from '@/store/selectors';
 
 const zoneId = demoFarmSetup.farm.zones[0].id;
 
+/** Mismo galpón con programa de luz de 16 h (lámparas 5:00–21:00). */
+const extendedSetup = {
+  ...demoFarmSetup,
+  farm: {
+    ...demoFarmSetup.farm,
+    zones: [{ ...demoFarmSetup.farm.zones[0], lighting: { type: 'extended' as const, startHour: 5, endHour: 21 } }],
+  },
+};
+
 /** Deja correr las confirmaciones (microtasks) de los actuadores. */
 const flush = async () => {
   for (let i = 0; i < 5; i++) await Promise.resolve();
 };
 
-async function createLoop(startHour = 10) {
+async function createLoop(startHour = 10, setup = demoFarmSetup) {
   farmActions.reset();
   const start = new Date(2026, 0, 1, startHour, 0, 0).getTime();
-  const source = new SimulatedSource({ setup: demoFarmSetup, startTime: start, seed: 42 });
-  const runtime = new FarmRuntime(source, new RuleEngine(), demoFarmSetup);
+  const source = new SimulatedSource({ setup, startTime: start, seed: 42 });
+  const runtime = new FarmRuntime(source, new RuleEngine(), setup);
   await runtime.start();
   source.stop(); // controlamos el tiempo manualmente
   const run = async (minutes: number) => {
@@ -34,8 +43,16 @@ const isActive = (kind: string) => farmStore.getState().actuatorStates[`${zoneId
 const alertTypes = () => farmStore.getState().alerts.map((a) => a.type);
 
 describe('circuito simulación → motor → actuadores', () => {
-  it('enciende la iluminación de día y registra la decisión', async () => {
-    const { run } = await createLoop(10);
+  it('luz natural: sin lámparas; de noche las aves reposan', async () => {
+    const { run } = await createLoop(19);
+    await run(60);
+    expect(isActive('lighting')).toBe(false);
+    expect(reading('animalActivity')!).toBeLessThan(25);
+    expect(alertTypes()).not.toContain('lowActivity');
+  });
+
+  it('programa extendido: enciende lámparas al anochecer y lo registra', async () => {
+    const { run } = await createLoop(19, extendedSetup);
     await run(1);
     expect(isActive('lighting')).toBe(true);
     expect(farmStore.getState().decisions.some((d) => d.ruleId === 'control.lighting')).toBe(true);

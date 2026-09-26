@@ -229,7 +229,6 @@ export function TimeSeriesChart({
 
       {cursor ? (
         <View
-          pointerEvents="none"
           style={[
             styles.tooltip,
             {
@@ -256,6 +255,7 @@ export function TimeSeriesChart({
 const styles = StyleSheet.create({
   touchLayer: { position: 'absolute', top: 0 },
   tooltip: {
+    pointerEvents: 'none',
     position: 'absolute',
     top: 0,
     width: TOOLTIP_WIDTH,

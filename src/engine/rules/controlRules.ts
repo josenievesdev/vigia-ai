@@ -1,3 +1,4 @@
+import { NATURAL_LIGHT } from '@/domain/lighting';
 import type { Hysteresis } from '@/domain/profiles';
 import type { ActuatorKind, SensorKind } from '@/domain/types';
 import { formatReading } from '@/utils/format';
@@ -100,21 +101,26 @@ export const waterPumpRule = hysteresisRule({
 
 export const lightingRule: Rule = {
   id: 'control.lighting',
-  name: 'Fotoperiodo',
-  description: 'Mantiene la iluminación encendida durante las horas de luz definidas para la especie.',
+  name: 'Programa de luz',
+  description:
+    'Sigue el programa de iluminación del galpón: solo luz natural, o lámparas que completan la luz que falta dentro de una ventana horaria.',
   evaluate(ctx) {
     const lighting = ctx.actuators.lighting;
-    if (!lighting || lighting.active === ctx.isPhotoperiod) return {};
-    const { startHour, endHour } = ctx.profile.control.photoperiod;
+    const wanted = ctx.light.artificialWanted;
+    if (!lighting || lighting.active === wanted) return {};
+    const program = ctx.zone.lighting ?? NATURAL_LIGHT;
+    let reason: string;
+    if (program.type === 'natural') reason = 'Programa de luz natural: sin iluminación artificial';
+    else if (wanted) reason = `Falta luz natural dentro del programa (${program.startHour}:00 – ${program.endHour}:00)`;
+    else if (ctx.light.isLightPeriod) reason = 'Hay suficiente luz natural';
+    else reason = `Fin del programa de luz (${program.endHour}:00)`;
     return {
       commands: [
         {
           actuator: 'lighting',
-          active: ctx.isPhotoperiod,
-          summary: ctx.isPhotoperiod ? 'Iluminación encendida' : 'Iluminación apagada',
-          reason: ctx.isPhotoperiod
-            ? `Inicio del fotoperiodo (${startHour}:00 – ${endHour}:00)`
-            : `Fin del fotoperiodo (${endHour}:00)`,
+          active: wanted,
+          summary: wanted ? 'Iluminación encendida' : 'Iluminación apagada',
+          reason,
           inputs: {},
         },
       ],

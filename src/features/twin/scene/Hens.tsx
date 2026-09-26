@@ -2,85 +2,60 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BoxGeometry, ConeGeometry, type Group, MeshStandardMaterial, SphereGeometry } from 'three';
 
-import { createRng } from '@/utils/random';
+import { actionCounts, createFlock, stepFlock } from '@/domain/behavior/flock';
+import type { BehaviorWorld, Flock, FlockAction } from '@/domain/behavior/types';
 
-import { BARN, HEN_FIGURES, PALETTE } from './layout';
+import { BARN, HEN_FIGURES, HEN_LAYOUT, PALETTE, PERCH } from './layout';
 import { type SelectHandler, tapHandler } from './shared';
 
-const X_LIMIT = BARN.length / 2 - 0.7;
-const Z_LIMIT = 0.85;
-const WANDER = 0.8;
+/** Cada cuánto se informa el resumen de la bandada a la UI 2D (s). */
+const SUMMARY_EVERY = 2;
 
-interface HenSeed {
-  x: number;
-  z: number;
-  heading: number;
-  phase: number;
+/** Partes animables de cada gallina. */
+interface HenRig {
+  body: Group | null;
+  torso: Group | null;
+  head: Group | null;
+  jaw: Group | null;
+  wingL: Group | null;
+  wingR: Group | null;
 }
 
-interface HenSim extends HenSeed {
-  homeX: number;
-  homeZ: number;
-  tx: number;
-  tz: number;
-  wait: number;
-  sit: number;
-}
-
-function createSeeds(count: number): HenSeed[] {
-  const rng = createRng(7);
-  return Array.from({ length: count }, (_, i) => {
-    const col = i % 8;
-    const row = Math.floor(i / 8);
-    return {
-      x: -X_LIMIT + (col + 0.5) * ((2 * X_LIMIT) / 8) + (rng() - 0.5) * 0.6,
-      z: -Z_LIMIT + (row + 0.5) * ((2 * Z_LIMIT) / 3) + (rng() - 0.5) * 0.3,
-      heading: rng() * Math.PI * 2,
-      phase: rng() * Math.PI * 2,
-    };
-  });
-}
-
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-
-function turnTowards(current: number, target: number, amount: number): number {
-  let diff = target - current;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
-  return current + diff * amount;
-}
+const SITTING: ReadonlySet<FlockAction> = new Set(['roost', 'rest', 'lethargic', 'dustbathe']);
 
 interface HensProps {
-  /** 0–1: intensidad de movimiento. */
-  activity: number;
-  resting: boolean;
+  world: BehaviorWorld;
   onSelect: SelectHandler;
+  /** Recibe cuántas aves hacen cada cosa (cada ~2 s). */
+  onSummary?: (counts: Record<FlockAction, number>) => void;
 }
 
 /**
- * Aves de corral estilizadas. El movimiento representa el índice de actividad:
- * caminan y picotean de día, se echan a descansar de noche y casi no se
- * mueven cuando la actividad es baja.
+ * Gallinas con comportamiento de NPC (IA de utilidad + steering, ver
+ * domain/behavior). Aquí solo se traduce cada acción a una postura animada.
  */
-export function Hens({ activity, resting, onSelect }: HensProps) {
-  const [seeds] = useState(() => createSeeds(HEN_FIGURES));
-  const bodies = useRef<(Group | null)[]>([]);
-  const heads = useRef<(Group | null)[]>([]);
-  const sims = useRef<HenSim[] | null>(null);
-  const inputs = useRef({ activity, resting });
+export function Hens({ world, onSelect, onSummary }: HensProps) {
+  const [ids] = useState(() => Array.from({ length: HEN_FIGURES }, (_, i) => i));
+  const rigs = useRef<HenRig[]>(ids.map(() => ({ body: null, torso: null, head: null, jaw: null, wingL: null, wingR: null })));
+  const flock = useRef<Flock | null>(null);
+  const sit = useRef<number[]>(ids.map(() => 0));
+  const inputs = useRef({ world, onSummary });
+  const summaryTimer = useRef(0);
 
   useEffect(() => {
-    inputs.current = { activity, resting };
-  }, [activity, resting]);
+    inputs.current = { world, onSummary };
+  }, [world, onSummary]);
 
   const shared = useMemo(
     () => ({
       body: new SphereGeometry(0.16, 12, 10),
       head: new SphereGeometry(0.075, 10, 8),
+      wing: new SphereGeometry(0.12, 10, 8),
       comb: new BoxGeometry(0.07, 0.05, 0.02),
       beak: new ConeGeometry(0.025, 0.07, 6),
       tail: new BoxGeometry(0.1, 0.15, 0.12),
       feathers: new MeshStandardMaterial({ color: PALETTE.henBody, roughness: 0.9 }),
+      wingColor: new MeshStandardMaterial({ color: '#86421f', roughness: 0.9 }),
       red: new MeshStandardMaterial({ color: PALETTE.henComb }),
       orange: new MeshStandardMaterial({ color: PALETTE.henBeak }),
     }),
@@ -97,70 +72,121 @@ export function Hens({ activity, resting, onSelect }: HensProps) {
   useFrame(({ clock }, delta) => {
     const dt = Math.min(delta, 0.1);
     const t = clock.elapsedTime;
-    const { activity: act, resting: rest } = inputs.current;
-    if (!sims.current) {
-      sims.current = seeds.map((s) => ({ ...s, homeX: s.x, homeZ: s.z, tx: s.x, tz: s.z, wait: Math.random() * 2, sit: 0 }));
-    }
-    const speed = 0.12 + 0.45 * act;
+    const { world: w, onSummary: report } = inputs.current;
 
-    sims.current.forEach((h, i) => {
-      const body = bodies.current[i];
-      const head = heads.current[i];
-      if (!body || !head) return;
-
-      // Echarse (noche) o levantarse.
-      h.sit += ((rest ? 1 : 0) - h.sit) * Math.min(1, dt * 1.5);
-
-      if (!rest) {
-        h.wait -= dt;
-        const dx = h.tx - h.x;
-        const dz = h.tz - h.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist < 0.04) {
-          if (h.wait <= 0) {
-            h.tx = clamp(h.homeX + (Math.random() - 0.5) * 2 * WANDER, -X_LIMIT, X_LIMIT);
-            h.tz = clamp(h.homeZ + (Math.random() - 0.5) * WANDER, -Z_LIMIT, Z_LIMIT);
-            // Con poca actividad pasan más tiempo quietas.
-            h.wait = (0.6 + Math.random() * 2.5) / Math.max(act, 0.12);
-          }
-        } else if (act > 0.08) {
-          const step = Math.min(dist, speed * act * dt * 2);
-          h.x += (dx / dist) * step;
-          h.z += (dz / dist) * step;
-          h.heading = turnTowards(h.heading, Math.atan2(-dz, dx), Math.min(1, dt * 6));
+    if (!flock.current) {
+      flock.current = createFlock(HEN_FIGURES, HEN_LAYOUT);
+      // Si la app abre de noche, las aves ya están dormidas en la percha.
+      if (w.light < 0.2) {
+        for (const a of flock.current.agents) {
+          a.action = 'roost';
+          a.pos = { ...HEN_LAYOUT.perches[a.perch] };
+          a.target = HEN_LAYOUT.perches[a.perch];
         }
       }
+    }
+    const f = flock.current;
+    stepFlock(f, w, HEN_LAYOUT, dt);
 
-      const moving = !rest && Math.hypot(h.tx - h.x, h.tz - h.z) >= 0.04 && act > 0.08;
-      body.position.set(h.x, BARN.floorTop - h.sit * 0.07, h.z);
-      body.rotation.y = h.heading;
-      // Picoteo al estar quietas; balanceo al caminar; cabeza recogida al descansar.
-      const peck = moving || rest ? 0 : Math.max(0, Math.sin(t * 5 + h.phase)) * act;
-      head.rotation.z = -0.9 * peck - h.sit * 0.35;
-      head.position.y = 0.3 - peck * 0.08 - h.sit * 0.06 + (moving ? Math.sin(t * 14 + h.phase) * 0.012 : 0);
+    summaryTimer.current += dt;
+    if (report && summaryTimer.current >= SUMMARY_EVERY) {
+      summaryTimer.current = 0;
+      report(actionCounts(f));
+    }
+
+    const panting = w.heatStress > 0.45;
+    f.agents.forEach((a, i) => {
+      const rig = rigs.current[i];
+      if (!rig.body || !rig.torso || !rig.head || !rig.jaw || !rig.wingL || !rig.wingR) return;
+      const phase = i * 1.7;
+      const perch = HEN_LAYOUT.perches[a.perch];
+      const perched = a.action === 'roost' && Math.hypot(perch.x - a.pos.x, perch.z - a.pos.z) < 0.25;
+
+      // Sentarse/echarse de forma gradual.
+      sit.current[i] += ((SITTING.has(a.action) ? 1 : 0) - sit.current[i]) * Math.min(1, dt * 2);
+      const s = sit.current[i];
+
+      rig.body.position.set(a.pos.x, (perched ? PERCH.y : BARN.floorTop) - s * 0.07, a.pos.z);
+      rig.body.rotation.y = a.heading;
+      rig.body.rotation.x = a.action === 'dustbathe' ? Math.sin(t * 6 + phase) * 0.3 : 0;
+
+      // Torso: plumas esponjadas con frío; respiración rápida al jadear.
+      const fluff = a.action === 'huddle' ? 1.15 : 1;
+      const breath = panting ? 1 + Math.sin(t * 14 + phase) * 0.04 : 1;
+      rig.torso.scale.set(fluff, fluff * breath, fluff);
+
+      // Cabeza según la acción.
+      let headTilt = 0;
+      let headTurn = 0;
+      let headY = 0.3;
+      switch (a.action) {
+        case 'eat':
+        case 'forage':
+          headTilt = -0.9 * Math.max(0, Math.sin(t * 5 + phase));
+          headY -= 0.08 * Math.max(0, Math.sin(t * 5 + phase));
+          break;
+        case 'drink':
+          headTilt = 0.45 + 0.2 * Math.max(0, Math.sin(t * 4 + phase));
+          break;
+        case 'preen':
+          headTilt = -0.3;
+          headTurn = Math.sin(t * 2 + phase) * 1.2;
+          break;
+        case 'crowd':
+          headTilt = -0.4 * Math.sin(t * 12 + phase);
+          break;
+        case 'roost':
+          headTilt = -0.5;
+          headY -= 0.08;
+          break;
+        case 'lethargic':
+          headTilt = -0.85;
+          headY -= 0.07;
+          break;
+        case 'pant':
+          headTilt = 0.15;
+          break;
+      }
+      rig.head.rotation.set(0, headTurn, headTilt);
+      rig.head.position.y = headY - s * 0.02;
+
+      // Pico abierto al jadear.
+      rig.jaw.rotation.z = panting && a.action !== 'roost' ? -0.45 - Math.sin(t * 16 + phase) * 0.15 : 0;
+
+      // Alas: separadas con calor, aleteo con agitación, pegadas al cuerpo en reposo.
+      let wingOpen = 0.05;
+      if (panting) wingOpen = 0.55;
+      if (a.action === 'crowd') wingOpen = 0.3 + Math.abs(Math.sin(t * 18 + phase)) * 0.6;
+      if (a.action === 'huddle' || a.action === 'roost') wingOpen = 0;
+      rig.wingR.rotation.x = -wingOpen;
+      rig.wingL.rotation.x = wingOpen;
     });
   });
 
+  const bind = (i: number, part: keyof HenRig) => (el: Group | null) => {
+    rigs.current[i][part] = el;
+  };
+
   return (
     <group onClick={tapHandler('hens', onSelect)}>
-      {seeds.map((s, i) => (
-        <group
-          key={i}
-          ref={(el) => {
-            bodies.current[i] = el;
-          }}
-          position={[s.x, BARN.floorTop, s.z]}
-          rotation={[0, s.heading, 0]}>
-          <mesh geometry={shared.body} material={shared.feathers} position={[0, 0.17, 0]} scale={[1.25, 0.95, 0.85]} dispose={null} />
-          <mesh geometry={shared.tail} material={shared.feathers} position={[-0.2, 0.27, 0]} rotation={[0, 0, 0.55]} dispose={null} />
-          <group
-            ref={(el) => {
-              heads.current[i] = el;
-            }}
-            position={[0.19, 0.3, 0]}>
+      {ids.map((i) => (
+        <group key={i} ref={bind(i, 'body')}>
+          <group ref={bind(i, 'torso')}>
+            <mesh geometry={shared.body} material={shared.feathers} position={[0, 0.17, 0]} scale={[1.25, 0.95, 0.85]} dispose={null} />
+            <mesh geometry={shared.tail} material={shared.feathers} position={[-0.2, 0.27, 0]} rotation={[0, 0, 0.55]} dispose={null} />
+          </group>
+          {[-1, 1].map((side) => (
+            <group key={side} ref={bind(i, side > 0 ? 'wingR' : 'wingL')} position={[0.01, 0.23, side * 0.12]}>
+              <mesh geometry={shared.wing} material={shared.wingColor} position={[-0.02, -0.05, 0]} scale={[1.15, 0.55, 0.2]} dispose={null} />
+            </group>
+          ))}
+          <group ref={bind(i, 'head')} position={[0.19, 0.3, 0]}>
             <mesh geometry={shared.head} material={shared.feathers} dispose={null} />
             <mesh geometry={shared.comb} material={shared.red} position={[0.01, 0.075, 0]} dispose={null} />
-            <mesh geometry={shared.beak} material={shared.orange} position={[0.085, -0.01, 0]} rotation={[0, 0, -Math.PI / 2]} dispose={null} />
+            <mesh geometry={shared.beak} material={shared.orange} position={[0.085, 0, 0]} rotation={[0, 0, -Math.PI / 2]} dispose={null} />
+            <group ref={bind(i, 'jaw')} position={[0.055, -0.012, 0]}>
+              <mesh geometry={shared.beak} material={shared.orange} position={[0.03, 0, 0]} rotation={[0, 0, -Math.PI / 2]} scale={[0.8, 0.8, 0.8]} dispose={null} />
+            </group>
           </group>
         </group>
       ))}

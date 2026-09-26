@@ -64,7 +64,8 @@ function SensorDetail({ kind }: { kind: SensorKind }) {
   const decisions = useFarmStore((s) => s.decisions);
   const reading = useReading(zone?.id, kind);
   const lastSeenAt = useFarmStore((s) => (sensor ? (s.sensorStatus[sensor.id]?.lastSeenAt ?? null) : null));
-  const { now, isPhotoperiod } = useFarmClock();
+  const { now, isLightPeriod } = useFarmClock();
+  const temperature = useReading(zone?.id, 'temperature').value;
   const history = useSensorHistory(zone?.id, kind, rangeMs);
 
   const info = SENSOR_KINDS[kind];
@@ -78,7 +79,7 @@ function SensorDetail({ kind }: { kind: SensorKind }) {
     );
   }
 
-  const tone = readingTone(kind, reading, profile, { isPhotoperiod });
+  const tone = readingTone(kind, reading, profile, { isLightPeriod, temperature });
   const { fg, bg } = toneColors(c, tone);
   const bands = thresholdBands(kind, profile);
   const target = targetRange(kind, profile);

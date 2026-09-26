@@ -3,7 +3,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { RELATED_ACTUATORS } from '@/domain/catalog';
 import type { Actuator, SensorKind, Timestamp } from '@/domain/types';
 import type { ActuatorTrack, HistoryRepository, SeriesPoint } from '@/services/history/HistoryRepository';
-import { getFarmRuntime } from '@/services/runtime';
+import { getFarmHistory } from '@/services/runtime';
 import { useFarmStore } from '@/store/useFarmStore';
 
 export interface SensorHistoryView {
@@ -52,7 +52,7 @@ function readHistory(
  * backend, cambiará la implementación de este hook, no las pantallas.
  */
 export function useSensorHistory(zoneId: string | undefined, kind: SensorKind, rangeMs: number): SensorHistoryView {
-  const history = getFarmRuntime().history;
+  const history = getFarmHistory();
   const version = useHistoryVersion(history);
   const now = useFarmStore((s) => s.now);
   const actuators = useFarmStore((s) => s.actuators);

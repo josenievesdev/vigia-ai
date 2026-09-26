@@ -1,12 +1,9 @@
-import { isPhotoperiod } from '@/domain/time';
+import type { LightState } from '@/domain/lighting';
 import { useFarmStore } from '@/store/useFarmStore';
 
-/** Hora actual de la granja (según la telemetría) y si está en periodo de luz. */
-export function useFarmClock() {
+/** Hora actual de la granja y su estado de luz (sol real + programa de iluminación). */
+export function useFarmClock(): { now: number | null; light: LightState | null; isLightPeriod: boolean } {
   const now = useFarmStore((s) => s.now);
-  const profile = useFarmStore((s) => s.profile);
-  return {
-    now,
-    isPhotoperiod: now !== null && profile !== null ? isPhotoperiod(now, profile) : true,
-  };
+  const light = useFarmStore((s) => s.environment?.light ?? null);
+  return { now, light, isLightPeriod: light?.isLightPeriod ?? true };
 }

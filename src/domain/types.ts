@@ -1,3 +1,6 @@
+import type { LightingProgram } from './lighting';
+import type { FarmLocation } from './location';
+
 /**
  * Modelo de dominio de VigíaAI.
  *
@@ -18,7 +21,7 @@ export interface Farm {
   id: string;
   name: string;
   speciesId: SpeciesId;
-  location?: string;
+  location: FarmLocation;
   zones: Zone[];
 }
 
@@ -29,6 +32,8 @@ export interface Zone {
   name: string;
   /** Número de animales alojados (o plantas, en cultivos). */
   population: number;
+  /** Programa de iluminación (por defecto, solo luz natural). */
+  lighting?: LightingProgram;
 }
 
 // ---------------------------------------------------------------------------

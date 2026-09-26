@@ -75,13 +75,15 @@ export const lowTemperatureAlert = thresholdRule({
 export const highHumidityAlert = thresholdRule({
   id: 'alert.highHumidity',
   name: 'Humedad elevada',
-  description: 'Humedad que favorece amoníaco y enfermedades respiratorias.',
+  description: 'Humedad alta con calor: agrava el estrés térmico.',
   type: 'highHumidity',
   sensor: 'humidity',
   direction: 'above',
   band: (ctx) => ctx.profile.alerts.highHumidity,
-  title: 'Humedad elevada',
-  message: (v, ctx) => `${v} en ${ctx.zone.name}. Verifique ventilación y estado de la cama.`,
+  when: (ctx) => (ctx.readings.temperature ?? -Infinity) >= ctx.profile.alerts.highHumidityMinTemperature,
+  title: 'Humedad elevada con calor',
+  message: (v, ctx) =>
+    `${v} con ${formatReading('temperature', ctx.readings.temperature)} en ${ctx.zone.name}. Agrava el estrés térmico: verifique ventilación.`,
 });
 
 export const lowWaterAlert = thresholdRule({
@@ -122,8 +124,9 @@ export const lowActivityAlert = thresholdRule({
   sensor: 'animalActivity',
   direction: 'below',
   band: (ctx) => ctx.profile.alerts.lowActivity,
-  // Se da 1 h de margen tras encender la luz para que las aves se activen.
-  when: (ctx) => ctx.isPhotoperiod && ctx.hour >= ctx.profile.control.photoperiod.startHour + 1,
+  // Margen de 1 h al amanecer (las aves se activan) y al anochecer (se retiran a dormir).
+  when: (ctx) =>
+    ctx.light.isLightPeriod && (ctx.light.minutesSinceStart ?? 0) >= 60 && (ctx.light.minutesUntilEnd ?? 0) >= 60,
   title: 'Actividad animal baja',
   message: (v, ctx) =>
     `Índice de actividad ${v} en ${ctx.zone.name}. Posible enfermedad, estrés o problema de bienestar.`,

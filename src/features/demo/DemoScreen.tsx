@@ -1,10 +1,15 @@
-import { Pressable, StyleSheet, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText, Card, Icon, type IconName, SectionHeader, Screen, Segmented } from '@/components/ui';
-import { getFarmRuntime } from '@/services/runtime';
+import { formatLocation } from '@/domain/location';
+import { getFarmRuntime, setSimulationMode } from '@/services/runtime';
+import type { SimulationClock } from '@/services/simulation/SimulatedSource';
+import { WEATHER_ATTRIBUTION } from '@/services/weather/types';
 import { SCENARIOS, type ScenarioId } from '@/services/simulation/scenarios';
 import { useFarmStore } from '@/store/useFarmStore';
 import { Radius, Spacing, useTheme } from '@/theme';
+import { formatClock } from '@/utils/format';
 
 const SCENARIO_ICONS: Record<ScenarioId, IconName> = {
   heatWave: 'weather-sunny-alert',
@@ -15,33 +20,79 @@ const SCENARIO_ICONS: Record<ScenarioId, IconName> = {
 };
 
 const SPEEDS = [
-  { value: 1, label: 'Real' },
   { value: 60, label: '1 min/s' },
   { value: 300, label: '5 min/s' },
+  { value: 900, label: '15 min/s' },
+];
+
+const MODES: { value: SimulationClock; label: string }[] = [
+  { value: 'live', label: 'En vivo' },
+  { value: 'accelerated', label: 'Acelerado' },
 ];
 
 /** Modo demo: dispara escenarios sobre la simulación para presentar la plataforma. */
 export function DemoScreen() {
   const c = useTheme();
   const simulation = useFarmStore((s) => s.simulation);
-  const runtime = getFarmRuntime();
+  const environment = useFarmStore((s) => s.environment);
+  const [switching, setSwitching] = useState(false);
 
-  if (!simulation) {
+  const changeMode = (mode: SimulationClock) => {
+    if (switching || mode === simulation?.mode) return;
+    setSwitching(true);
+    setSimulationMode(mode)
+      .catch((error) => console.warn('[VigíaAI] No se pudo cambiar el modo', error))
+      .finally(() => setSwitching(false));
+  };
+
+  if (!simulation || switching) {
     return (
       <Screen title="Modo demo">
-        <Card>
-          <AppText muted>El modo demo solo está disponible con la fuente simulada.</AppText>
+        <Card style={styles.loading}>
+          <ActivityIndicator />
+          <AppText muted>Preparando la simulación y el clima…</AppText>
         </Card>
       </Screen>
     );
   }
 
+  const live = simulation.mode === 'live';
+  const updatedAt = environment?.weatherUpdatedAt;
+
   return (
     <Screen title="Modo demo" subtitle="Simula eventos para ver la respuesta automática del sistema">
       <Card style={styles.section}>
-        <SectionHeader title="Velocidad de simulación" />
-        <Segmented value={simulation.timeScale} onChange={(v) => runtime.setTimeScale(v)} options={SPEEDS} />
+        <SectionHeader title="Modo de simulación" />
+        <Segmented value={simulation.mode} onChange={changeMode} options={MODES} />
+        <AppText variant="caption" muted>
+          {live
+            ? 'Hora real y clima real de la granja: la simulación avanza al ritmo del mundo.'
+            : 'El tiempo avanza rápido para presentar un día completo en minutos (usa el pronóstico real).'}{' '}
+          Cambiar de modo reinicia la simulación.
+        </AppText>
+        {environment ? (
+          <View style={[styles.weatherRow, { backgroundColor: c.surfaceMuted }]}>
+            <Icon name={environment.realWeather ? 'cloud-check-outline' : 'cloud-off-outline'} size={18} color={c.textMuted} />
+            <AppText variant="caption" muted style={styles.flex}>
+              {environment.realWeather
+                ? `Clima real de ${formatLocation(environment.location)}${updatedAt ? ` · actualizado a las ${formatClock(updatedAt)}` : ''}`
+                : 'Sin conexión al servicio de clima: se usa un clima de respaldo.'}
+            </AppText>
+          </View>
+        ) : null}
+        {environment?.realWeather ? (
+          <AppText variant="caption" muted>
+            {WEATHER_ATTRIBUTION}
+          </AppText>
+        ) : null}
       </Card>
+
+      {!live ? (
+        <Card style={styles.section}>
+          <SectionHeader title="Velocidad" />
+          <Segmented value={simulation.timeScale} onChange={(v) => getFarmRuntime().setTimeScale(v)} options={SPEEDS} />
+        </Card>
+      ) : null}
 
       <Card style={styles.section}>
         <SectionHeader title="Escenarios" />
@@ -60,7 +111,7 @@ export function DemoScreen() {
               </View>
               <Switch
                 value={enabled}
-                onValueChange={(v) => runtime.setScenario(s.id, v)}
+                onValueChange={(v) => getFarmRuntime().setScenario(s.id, v)}
                 trackColor={{ true: c.warning, false: c.border }}
                 accessibilityLabel={s.label}
               />
@@ -71,7 +122,7 @@ export function DemoScreen() {
 
       {simulation.scenarios.length ? (
         <Pressable
-          onPress={() => runtime.clearScenarios()}
+          onPress={() => getFarmRuntime().clearScenarios()}
           accessibilityRole="button"
           style={[styles.reset, { borderColor: c.border, backgroundColor: c.surface }]}>
           <Icon name="restore" size={18} color={c.text} />
@@ -88,6 +139,9 @@ export function DemoScreen() {
 }
 
 const styles = StyleSheet.create({
+  loading: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xl },
+  flex: { flex: 1 },
+  weatherRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.sm, borderRadius: Radius.sm },
   section: { gap: Spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.sm },
   divider: { borderTopWidth: StyleSheet.hairlineWidth },

@@ -1,4 +1,6 @@
 import { ACTUATOR_KINDS, SENSOR_KINDS } from '@/domain/catalog';
+import { NATURAL_LIGHT } from '@/domain/lighting';
+import type { FarmLocation } from '@/domain/location';
 import type { ActuatorKind, Actuator, Farm, Sensor, SensorKind } from '@/domain/types';
 
 import type { ZoneModelParams } from './environmentModel';
@@ -13,6 +15,17 @@ export interface FarmSetup {
   sensors: Sensor[];
   actuators: Actuator[];
 }
+
+/** Ubicación real de la granja demo (coordenadas de Open-Meteo Geocoding). */
+export const VALLEDUPAR: FarmLocation = {
+  name: 'Valledupar',
+  region: 'Cesar',
+  country: 'Colombia',
+  latitude: 10.46538,
+  longitude: -73.2531,
+  elevation: 160,
+  timezone: 'America/Bogota',
+};
 
 const FARM_ID = 'farm-el-paraiso';
 const ZONE_ID = 'zone-galpon-1';
@@ -33,7 +46,8 @@ export const demoFarmSetup: FarmSetup = {
     id: FARM_ID,
     name: 'Granja El Paraíso',
     speciesId: 'layingHens',
-    zones: [{ id: ZONE_ID, farmId: FARM_ID, name: 'Galpón 1', population: 1200 }],
+    location: VALLEDUPAR,
+    zones: [{ id: ZONE_ID, farmId: FARM_ID, name: 'Galpón 1', population: 1200, lighting: NATURAL_LIGHT }],
   },
   sensors: sensorKinds.map((kind) => ({
     id: `${ZONE_ID}:${kind}`,

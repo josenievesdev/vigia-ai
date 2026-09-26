@@ -1,5 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { LightState } from '@/domain/lighting';
+import type { FarmLocation } from '@/domain/location';
 import { compareAlerts } from '@/engine/alerts/AlertManager';
 import type { SpeciesProfile } from '@/domain/profiles';
 import type {
@@ -15,7 +17,9 @@ import type {
   Timestamp,
 } from '@/domain/types';
 import type { ScenarioId } from '@/services/simulation/scenarios';
+import type { SimulationClock } from '@/services/simulation/SimulatedSource';
 import type { TelemetryBatch, TelemetrySourceKind } from '@/services/telemetry/TelemetrySource';
+import type { OutsideConditions, WeatherStatus } from '@/services/weather/types';
 
 const MAX_DECISIONS = 100;
 const MAX_RESOLVED_ALERTS = 50;
@@ -23,8 +27,21 @@ const MAX_RESOLVED_ALERTS = 50;
 export type ConnectionStatus = 'idle' | 'connecting' | 'live' | 'error';
 
 export interface SimulationState {
+  mode: SimulationClock;
   scenarios: ScenarioId[];
   timeScale: number;
+}
+
+/** Contexto exterior de la granja en la hora actual (clima + sol). */
+export interface EnvironmentView {
+  location: FarmLocation;
+  outside: OutsideConditions;
+  /** true si `outside` viene de datos reales (no del clima de respaldo). */
+  realWeather: boolean;
+  weatherStatus: WeatherStatus;
+  weatherUpdatedAt: Timestamp | null;
+  /** Estado de luz de la zona principal (sol real + programa de iluminación). */
+  light: LightState;
 }
 
 export interface FarmState {
@@ -50,6 +67,7 @@ export interface FarmState {
   decisions: Decision[];
 
   simulation: SimulationState | null;
+  environment: EnvironmentView | null;
 }
 
 const initialState: FarmState = {
@@ -68,6 +86,7 @@ const initialState: FarmState = {
   resolvedAlerts: [],
   decisions: [],
   simulation: null,
+  environment: null,
 };
 
 /**
@@ -143,5 +162,9 @@ export const farmActions = {
 
   setSimulation(simulation: SimulationState) {
     farmStore.setState({ simulation });
+  },
+
+  setEnvironment(environment: EnvironmentView) {
+    farmStore.setState({ environment });
   },
 };
