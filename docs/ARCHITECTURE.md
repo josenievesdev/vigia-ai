@@ -90,7 +90,48 @@ Toda la telemetría entra por la interfaz `TelemetrySource` (`src/services/telem
   - una vista de tabla por hora equivalente a cada gráfica.
 - **Métricas del periodo:** mínimo, promedio y máximo ponderados por tiempo, y % del tiempo en el rango objetivo (`targetRange` del perfil).
 
-## 8. Modo demo
+## 8. Gemelo digital 3D (fase 5)
+
+Representación funcional (no un videojuego): todo lo que se ve se deriva del estado real de la granja.
+
+- **Stack:** `three` 0.186 + `@react-three/fiber` 9.8, con estos puntos de entrada:
+  - web: `@react-three/fiber` sobre `<canvas>`;
+  - iOS/Android: `@react-three/fiber/native` sobre `expo-gl`, incluido en Expo Go;
+  - la elección la hacen `Canvas3D.tsx` y `Canvas3D.native.tsx` por extensión de plataforma.
+- **`twinState.ts`** (función pura, con pruebas) traduce el store al estado visual (`TwinState`):
+  - niveles, equipos activos, actividad y reposo de las aves;
+  - día/noche, estado por sensor y severidad de alerta por elemento.
+- **Escena procedural** (`src/features/twin/scene`): sin modelos, texturas ni `drei`, para priorizar estabilidad en nativo.
+  - **Galpón:** techo translúcido; el aire se tiñe de ámbar o rojo cuando el clima entra en advertencia o crítico.
+  - **Aves:** 24 figuras (1 ≈ 50 aves). Caminan y picotean según el índice de actividad, y se echan de noche.
+  - **Ventiladores:** arranque y frenado graduales.
+  - **Silo:** con nivel visible y grano por el sinfín cuando el alimentador está activo.
+  - **Tanque:** con nivel, LED de bomba y gotas en la tubería.
+  - **Lámparas:** encendidas según el fotoperiodo.
+  - **Nodos de sensores:** con LED de estado, que parpadea en alerta y queda gris si el sensor está desconectado.
+  - **Anillos en el suelo:** pulsantes para las alertas y fijos para la selección.
+  - **Cielo:** su luz sigue la hora de la granja.
+- **Interacción:**
+  - vistas predefinidas (General, Interior, Suministros, Ventilación);
+  - tocar un elemento acerca la cámara y abre su ficha, con acceso al historial (fase 4);
+  - arrastrar gira la cámara y tocar en vacío quita la selección;
+  - la distancia de la cámara se ajusta a la proporción de la pantalla para que el galpón quepa en un teléfono vertical.
+- **Panel 2D:** equivalente en texto del 3D. Muestra el estado de cada elemento con etiqueta y leyenda; nada depende solo del color.
+- **Rendimiento:**
+  - las aves comparten geometrías y materiales;
+  - sin sombras;
+  - el render se pausa (`frameloop: never`) cuando la pestaña no está visible.
+- **Compatibilidad nativa:**
+  - `metro.config.js` fuerza que `three` use su build ESM. El build CommonJS de three ≥ 0.18x llama a `process.emitWarning` al cargarse, que no existe en Hermes (provocaba "undefined is not a function" al abrir el gemelo en iOS).
+  - Una prueba de regresión lo vigila (`__tests__/metro-config.test.js`).
+- **Respaldo:** el visor 3D se carga de forma diferida y dentro de un `ErrorBoundary`. Si falla en un dispositivo, la pantalla muestra un aviso y el panel de estado sigue funcionando.
+- **Verificación:**
+  - ejecución en web;
+  - bundles de iOS y Android;
+  - simulación en Node de la carga del módulo nativo.
+  - La prueba final es en un teléfono con Expo Go, porque los simuladores de iOS no son fiables para OpenGL.
+
+## 9. Modo demo
 
 `src/services/simulation/scenarios.ts` define los escenarios:
 - ola de calor
@@ -103,7 +144,7 @@ Los escenarios **modifican el modelo físico**, no los números que se muestran.
 
 **Mientras no haya hardware, todo funciona en simulación**, incluido el gemelo 3D (fase 5) y el módulo de producción (fase 6).
 
-## 9. Preparación para hardware (fase 7, no implementado)
+## 10. Preparación para hardware (fase 7, no implementado)
 
 Los IDs ya tienen la forma necesaria para mapearse a tópicos MQTT:
 
@@ -121,7 +162,7 @@ Plan:
 
 **Decisión clave:** el control crítico (ventilación, agua) no puede depender de que el teléfono esté encendido. El ESP32 o un gateway tendrá un control básico de seguridad con umbrales locales, y el motor completo correrá en el servidor. La app supervisará y dará órdenes. El motor ya es TypeScript puro para poder moverlo sin reescribirlo.
 
-## 10. Backend (fase 8, no implementado)
+## 11. Backend (fase 8, no implementado)
 
 Supabase o Firebase para:
 - autenticación
@@ -133,7 +174,7 @@ Supabase o Firebase para:
 
 La configuración de la granja que hoy está en `demoFarm.ts` pasará a venir de la base de datos.
 
-## 11. Visión artificial (fase 10, no implementada)
+## 12. Visión artificial (fase 10, no implementada)
 
 Contrato previsto en `src/domain/vision/types.ts`:
 - **Detección de movimiento:** índice de movimiento por zona.
@@ -143,7 +184,7 @@ Contrato previsto en `src/domain/vision/types.ts`:
 
 El análisis de video se hará en un gateway local o en la nube, no en el teléfono. La app recibirá `VisionEvent`/`VisionInsights`, que se añadirán al `ZoneContext`, para que las reglas o la IA combinen visión y sensores (por ejemplo: baja actividad + aglomeración + temperatura alta → estrés térmico). El tipo de alerta `abnormalBehavior` ya está reservado.
 
-## 12. Hoja de ruta
+## 13. Hoja de ruta
 
 ### Bloque A: app completa sin hardware (todo simulado)
 | Fase | Contenido | Estado |
@@ -153,8 +194,8 @@ El análisis de video se hará en un gateway local o en la nube, no en el teléf
 | 2 | Dashboard | ✅ |
 | 3 | Motor de reglas + alertas + modo demo | ✅ |
 | 4 | Historial y gráficas (detalle por sensor, bandas, franjas de equipos, minigráficas, tabla por hora) | ✅ |
-| 5 | Gemelo digital 3D, representación funcional alimentada por la simulación | ⏭️ Siguiente |
-| 6 | **Módulo de producción** + configuración (umbrales editables, datos de granja y galpones) | Pendiente |
+| 5 | Gemelo digital 3D, representación funcional alimentada por la simulación | ✅ (validar en teléfono) |
+| 6 | **Módulo de producción** + configuración (umbrales editables, datos de granja y galpones) | ⏭️ Siguiente |
 
 **Módulo de producción (fase 6):**
 - huevos por día y % de postura

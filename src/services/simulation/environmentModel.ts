@@ -2,7 +2,7 @@ import type { SpeciesProfile } from '@/domain/profiles';
 import { hourOfDay } from '@/domain/time';
 import type { ActuatorKind, Timestamp } from '@/domain/types';
 
-import { noise, type Rng } from './random';
+import { noise, type Rng } from '@/utils/random';
 import type { ScenarioId } from './scenarios';
 
 /**

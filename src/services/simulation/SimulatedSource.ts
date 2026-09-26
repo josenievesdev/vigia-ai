@@ -23,7 +23,7 @@ import {
   initialEnvironment,
   type ZoneModelParams,
 } from './environmentModel';
-import { createRng, noise, type Rng } from './random';
+import { createRng, noise, type Rng } from '@/utils/random';
 import type { ScenarioId } from './scenarios';
 
 export interface SimulatedSourceOptions {

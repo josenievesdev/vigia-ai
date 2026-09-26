@@ -1,10 +1,14 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getFarmRuntime } from '@/services/runtime';
 import { useTheme } from '@/theme';
+
+// Avisos conocidos e inofensivos de three.js/expo-gl en desarrollo.
+LogBox.ignoreLogs(['THREE.Clock', 'EXGL: gl.pixelStorei']);
 
 export default function RootLayout() {
   const scheme = useColorScheme();

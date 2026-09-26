@@ -8,7 +8,7 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
 **Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-## Estado actual (fases 0–4)
+## Estado actual (fases 0–5)
 
 | Módulo | Estado |
 |---|---|
@@ -20,8 +20,8 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | Alertas (deduplicación, severidad, antiparpadeo, historial) | ✅ |
 | Modo demo (ola de calor, falta de agua o alimento, baja actividad, sensor caído) | ✅ |
 | Historial y gráficas por sensor (bandas de umbral, franjas de equipos, cursor, tabla por hora, minigráficas) | ✅ |
-| Gemelo digital 3D (simulado) | Fase 5 — siguiente |
-| Módulo de producción + configuración | Fase 6 |
+| Gemelo digital 3D funcional (galpón, aves, equipos y sensores reaccionan a los datos) | ✅ |
+| Módulo de producción + configuración | Fase 6 — siguiente |
 | Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 7–10 |
 
 Sin hardware todavía: toda la app funciona sobre la simulación, que arranca con 24 h de historia previa.
@@ -49,7 +49,7 @@ src/
 │   ├── history/      # HistoryRepository (historial) + analítica del periodo
 │   └── runtime/      # FarmRuntime: orquesta fuente → motor → store
 ├── store/            # Estado global (Zustand) y selectores
-├── features/         # Pantallas por módulo (dashboard, sensors, alerts, automation, demo)
+├── features/         # Pantallas por módulo (dashboard, twin, sensors, alerts, automation, demo)
 ├── components/ui/    # Sistema de componentes reutilizables
 ├── components/charts/# Gráficas SVG (serie temporal, minigráfica)
 ├── theme/            # Tokens de color (claro/oscuro), espaciado

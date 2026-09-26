@@ -52,4 +52,6 @@ Docs: https://docs.expo.dev/eas/index.md
 - On web, `Link asChild` cannot receive an array `style`; use `router.push` on a `Pressable` instead.
 - Screens read history only through `useSensorHistory` (`src/hooks/use-history.ts`); never call the repository from components.
 - Charts: one series per chart in `chartLine`; status colors only for threshold bands, always explained by a legend; keep a table-view equivalent. SVG text needs `fontFamily` on web (defaults to serif).
+- 3D twin: import `Canvas` only from `src/features/twin/Canvas3D` (web/native split). Scene = procedural geometry; no drei/GLTF/textures (native stability). Everything visible must derive from `TwinState` (`twinState.ts`, pure + tested). Decorative meshes use `raycast={noRaycast}`; per-frame mutable state lives in refs synced via `useEffect` (React Compiler rules). Native runtime can only be verified on a device.
+- Web working does NOT prove native works: Metro resolves `require()` with different package-export conditions on native. Keep the `three` → ESM redirect in `metro.config.js` (three CJS calls `process.emitWarning`, absent in Hermes). When adding native-heavy deps, check the iOS bundle (`npx expo export --platform ios --no-bytecode`) for Node-only APIs (`process.emitWarning`, `fs`, …).
 - Before finishing: `npm test`, `npx tsc --noEmit`, `npx expo lint`.

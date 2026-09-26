@@ -24,6 +24,7 @@ export default function TabsLayout() {
         tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border },
       }}>
       <Tabs.Screen name="index" options={{ title: 'Inicio', tabBarIcon: tabIcon('view-dashboard-outline') }} />
+      <Tabs.Screen name="twin" options={{ title: 'Gemelo', tabBarIcon: tabIcon('cube-outline') }} />
       <Tabs.Screen
         name="alerts"
         options={{
