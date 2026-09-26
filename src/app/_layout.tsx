@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getFarmRuntime } from '@/services/runtime';
+import { getFarmRuntime, startFarm } from '@/services/runtime';
 import { useTheme } from '@/theme';
 
 // Avisos conocidos e inofensivos de three.js/expo-gl en desarrollo.
@@ -15,9 +15,7 @@ export default function RootLayout() {
   const c = useTheme();
 
   useEffect(() => {
-    getFarmRuntime()
-      .start()
-      .catch((error) => console.warn('[VigíaAI] No se pudo iniciar la telemetría', error));
+    startFarm().catch((error) => console.warn('[VigíaAI] No se pudo iniciar la granja', error));
     // Se detiene el runtime vigente (puede haber cambiado de modo desde la pestaña Demo).
     return () => getFarmRuntime().stop();
   }, []);
@@ -34,6 +32,9 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Inicio' }} />
         <Stack.Screen name="sensor/[kind]" options={{ title: '' }} />
+        <Stack.Screen name="automation" options={{ title: 'Control de equipos' }} />
+        <Stack.Screen name="demo" options={{ title: 'Modo demo' }} />
+        <Stack.Screen name="settings" options={{ title: 'Configuración' }} />
       </Stack>
     </ThemeProvider>
   );

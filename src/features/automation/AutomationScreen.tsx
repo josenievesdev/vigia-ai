@@ -18,7 +18,7 @@ export function AutomationScreen() {
   const now = useFarmStore((s) => s.now) ?? 0;
 
   return (
-    <Screen title="Automatización" subtitle={zone ? `Equipos de ${zone.name}` : undefined}>
+    <Screen topInset={false} subtitle={zone ? `Equipos de ${zone.name} · el switch pasa un equipo a manual` : undefined}>
       <Card style={styles.section}>
         <SectionHeader title="Equipos" />
         {actuators.map((a, i) => (

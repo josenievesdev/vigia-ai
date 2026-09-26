@@ -31,6 +31,16 @@ const TIME_STEPS_MIN = [15, 30, 60, 120, 180, 240, 360];
 /** Marcas de tiempo alineadas a la hora local (p. ej. 06:00, 12:00, 18:00). */
 export function timeTicks(from: number, to: number, maxTicks = 5): number[] {
   const spanMin = (to - from) / 60_000;
+  // Periodos largos: marcas a medianoche cada N días.
+  if (spanMin > 2 * 1440) {
+    const everyDays = Math.max(1, Math.ceil(spanMin / 1440 / maxTicks));
+    const d = new Date(from);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() < from) d.setDate(d.getDate() + 1);
+    const dayTicks: number[] = [];
+    for (; d.getTime() <= to; d.setDate(d.getDate() + everyDays)) dayTicks.push(d.getTime());
+    return dayTicks;
+  }
   const step = TIME_STEPS_MIN.find((s) => spanMin / s <= maxTicks) ?? 720;
   const start = new Date(from);
   start.setSeconds(0, 0);

@@ -25,6 +25,7 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Inicio', tabBarIcon: tabIcon('view-dashboard-outline') }} />
       <Tabs.Screen name="twin" options={{ title: 'Gemelo', tabBarIcon: tabIcon('cube-outline') }} />
+      <Tabs.Screen name="production" options={{ title: 'Producción', tabBarIcon: tabIcon('egg-outline') }} />
       <Tabs.Screen
         name="alerts"
         options={{
@@ -34,8 +35,7 @@ export default function TabsLayout() {
           tabBarBadgeStyle: { backgroundColor: c.critical },
         }}
       />
-      <Tabs.Screen name="automation" options={{ title: 'Control', tabBarIcon: tabIcon('tune-variant') }} />
-      <Tabs.Screen name="demo" options={{ title: 'Demo', tabBarIcon: tabIcon('flask-outline') }} />
+      <Tabs.Screen name="more" options={{ title: 'Más', tabBarIcon: tabIcon('dots-horizontal-circle-outline') }} />
     </Tabs>
   );
 }

@@ -8,7 +8,7 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
 **Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-## Estado actual (fases 0–6)
+## Estado actual (fases 0–7)
 
 | Módulo | Estado |
 |---|---|
@@ -23,10 +23,11 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | Gemelo digital 3D funcional (galpón, aves, equipos y sensores reaccionan a los datos) | ✅ |
 | Mundo real: Valledupar, sol calculado localmente, clima real de Open-Meteo, modos en vivo/acelerado | ✅ |
 | Gallinas con IA de NPC (utilidad + steering): duermen al ocultarse el sol, jadean con calor, se agolpan sin agua… | ✅ |
-| Módulo de producción + configuración | Fase 7 — siguiente |
+| Producción: huevos, % de postura, mortalidad, alimento y agua por ave, conversión, y qué la está afectando (calor, luz, agua…) | ✅ |
+| Configuración guardada en el teléfono: granja, ubicación, galpón, edad del lote, programa de luz y umbrales | ✅ |
 | Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 8–11 |
 
-Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de Valledupar (Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia generada con el clima real de ayer.
+Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de la ubicación (Valledupar por defecto; Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia; la producción, con 30 días estimados con el clima real del último mes.
 
 ## Comandos
 
@@ -43,18 +44,20 @@ npm run lint          # ESLint
 ```
 src/
 ├── app/              # Rutas (Expo Router): solo re-exportan pantallas
-├── domain/           # Tipos, perfiles, sol, programas de luz, comportamiento animal, visión (futuro). TS puro
+├── domain/           # Tipos, perfiles, sol, luz, comportamiento animal, modelo de producción, visión (futuro). TS puro
 ├── engine/           # Motor de reglas, alertas, contexto. TS puro
 ├── services/
 │   ├── telemetry/    # Interfaz TelemetrySource (frontera con el hardware)
 │   ├── simulation/   # SimulatedSource + modelo físico + escenarios demo
 │   ├── history/      # HistoryRepository (historial) + analítica del periodo
-│   ├── weather/      # Clima real (Open-Meteo) + respaldo sintético
-│   └── runtime/      # FarmRuntime: orquesta fuente → motor → store
+│   ├── weather/      # Clima real (Open-Meteo) + respaldo sintético + búsqueda de lugares
+│   ├── production/   # ProductionService: historial de 30 días + día en curso
+│   ├── config/       # Configuración de la granja: validación y guardado en el teléfono
+│   └── runtime/      # FarmRuntime: orquesta fuente → motor → producción → store
 ├── store/            # Estado global (Zustand) y selectores
-├── features/         # Pantallas por módulo (dashboard, twin, sensors, alerts, automation, demo)
+├── features/         # Pantallas por módulo (dashboard, twin, production, alerts, more, settings, automation, demo…)
 ├── components/ui/    # Sistema de componentes reutilizables
-├── components/charts/# Gráficas SVG (serie temporal, minigráfica)
+├── components/charts/# Gráficas SVG (serie temporal, barras, minigráfica)
 ├── theme/            # Tokens de color (claro/oscuro), espaciado
 ├── hooks/, utils/
 ```

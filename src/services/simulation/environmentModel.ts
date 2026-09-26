@@ -44,9 +44,9 @@ export const initialEnvironment: EnvironmentState = {
 /** Paso máximo de integración para mantener estable el modelo. */
 const MAX_STEP_SECONDS = 30;
 /** Calentamiento del interior por el sol sobre el techo, °C a 1000 W/m². */
-const SOLAR_GAIN = 2.5;
+export const SOLAR_GAIN = 2.5;
 /** Enfriamiento de la ventilación forzada, °C. */
-const VENTILATION_COOLING = 5;
+export const VENTILATION_COOLING = 5;
 /** Escenario demo "ola de calor": grados extra sobre el clima exterior. */
 const HEAT_WAVE_EXTRA = 11;
 /** Iluminancia interior por W/m² de radiación exterior (galpón abierto y techado). */

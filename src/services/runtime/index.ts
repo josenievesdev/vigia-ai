@@ -1,6 +1,17 @@
+import type { FarmLocation } from '@/domain/location';
+import { getSpeciesProfile } from '@/domain/profiles';
 import { RuleEngine } from '@/engine/RuleEngine';
+import { loadConfig, saveConfig } from '@/services/config/configStorage';
+import {
+  defaultConfig,
+  type FarmConfig,
+  profileWithThresholds,
+  setupFromConfig,
+  validateConfig,
+} from '@/services/config/farmConfig';
 import type { HistoryRepository } from '@/services/history/HistoryRepository';
 import { InMemoryHistory } from '@/services/history/InMemoryHistory';
+import { ProductionService } from '@/services/production/ProductionService';
 import { demoFarmSetup } from '@/services/simulation/demoFarm';
 import { type SimulationClock, SimulatedSource } from '@/services/simulation/SimulatedSource';
 import { WeatherService } from '@/services/weather/WeatherService';
@@ -10,29 +21,44 @@ import { FarmRuntime } from './FarmRuntime';
 
 export { FarmRuntime } from './FarmRuntime';
 
+const baseProfile = getSpeciesProfile(demoFarmSetup.farm.speciesId);
+
 let mode: SimulationClock = 'live';
 let runtime: FarmRuntime | null = null;
+let config: FarmConfig = defaultConfig(baseProfile);
+let configLoaded = false;
 
-/** Clima real de la granja. Se comparte entre reinicios para conservar lo descargado. */
-const weather = new WeatherService(demoFarmSetup.farm.location);
 /**
  * Historial único (se limpia al reiniciar). Al ser siempre el mismo objeto, la UI
  * puede guardarlo sin riesgo aunque el runtime cambie.
  */
 const history = new InMemoryHistory();
 
+/** Clima por ubicación: se conserva lo descargado entre reinicios. */
+let weather: WeatherService | null = null;
+function weatherFor(location: FarmLocation): WeatherService {
+  if (!weather || weather.location.latitude !== location.latitude || weather.location.longitude !== location.longitude) {
+    weather = new WeatherService(location);
+  }
+  return weather;
+}
+
 /**
- * Punto único donde se elige la fuente de datos. Para conectar hardware real
- * bastará con cambiar `SimulatedSource` por `MqttSource` (y la configuración
- * de la granja por la que venga del backend). El clima real se mantiene.
+ * Punto único donde se arma la granja. Para conectar hardware real bastará
+ * con cambiar `SimulatedSource` por `MqttSource`; el clima real se mantiene.
  */
 function createRuntime(clock: SimulationClock): FarmRuntime {
-  const source = new SimulatedSource({ setup: demoFarmSetup, clock, weather });
-  return new FarmRuntime(source, new RuleEngine(), demoFarmSetup, {
+  const setup = setupFromConfig(config);
+  const profile = profileWithThresholds(baseProfile, config.thresholds);
+  const outside = weatherFor(config.location);
+  const source = new SimulatedSource({ setup, clock, weather: outside });
+  return new FarmRuntime(source, new RuleEngine(), setup, {
     // Arranca con un día completo de historia, simulada con el clima real de ayer.
     primeSeconds: 24 * 3600,
-    weather,
+    weather: outside,
     history,
+    profile,
+    production: new ProductionService({ setup, profile, weather: outside }),
   });
 }
 
@@ -50,16 +76,42 @@ export function getFarmRuntime(): FarmRuntime {
   return runtime;
 }
 
+async function restart(): Promise<void> {
+  runtime?.stop();
+  history.clear();
+  farmActions.reset();
+  farmActions.setConfig(config);
+  runtime = createRuntime(mode);
+  await runtime.start();
+}
+
+/** Arranque de la app: carga la configuración guardada y pone en marcha la granja. */
+export async function startFarm(): Promise<void> {
+  if (!configLoaded) {
+    config = await loadConfig(baseProfile);
+    configLoaded = true;
+    runtime?.stop();
+    runtime = null;
+  }
+  farmActions.setConfig(config);
+  await getFarmRuntime().start();
+}
+
 /**
  * Cambia entre simulación en vivo (hora y clima reales) y acelerada (demos).
  * Reinicia la simulación: el historial y los registros se regeneran.
  */
 export async function setSimulationMode(next: SimulationClock): Promise<void> {
   if (runtime && next === mode) return;
-  runtime?.stop();
   mode = next;
-  history.clear();
-  farmActions.reset();
-  runtime = createRuntime(next);
-  await runtime.start();
+  await restart();
+}
+
+/** Guarda y aplica una configuración nueva (reinicia la simulación con ella). */
+export async function applyFarmConfig(next: FarmConfig): Promise<void> {
+  const errors = validateConfig(next);
+  if (errors.length) throw new Error(errors.join(' '));
+  await saveConfig(next);
+  config = next;
+  await restart();
 }

@@ -149,7 +149,7 @@ La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altit
   - Luz = radiación solar real + lámparas.
   - **Lo real es el exterior; el interior sigue siendo un modelo hasta tener sensores.**
 - **Humedad con criterio agronómico:** solo se alerta de humedad alta cuando coincide con calor (≥ 28 °C), porque es entonces cuando agrava el estrés térmico. Así las noches húmedas de Valledupar no generan falsas alarmas.
-- **Modos de simulación** (pestaña Demo):
+- **Modos de simulación** (Más → Modo demo):
   - **En vivo:** reloj y clima reales.
   - **Acelerado:** para presentaciones, recorre el pronóstico real a 1, 5 o 15 min/s.
   - Cambiar de modo reinicia la simulación con 24 h de historia generada con el clima real.
@@ -166,7 +166,43 @@ La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altit
   - un recuadro muestra ciudad, clima, hora y la próxima salida o puesta del sol.
 - **Licencia de Open-Meteo:** el plan gratuito es **solo no comercial** y exige atribución (CC BY 4.0, visible en la app). Antes de comercializar hay que contratar su plan pago o consultar desde el servidor propio (fase 9).
 
-## 10. Modo demo
+## 10. Producción y configuración (fase 7)
+
+**Producción** (`domain/production`, puro y con pruebas; `services/production/ProductionService.ts`):
+- **Modelo:** la postura esperada sale de la curva por edad del lote (pico de ~95 % a las 30 semanas). Sobre ella se multiplican factores:
+  - luz: −2 % por cada hora que falte para 16 h;
+  - calor: grados-hora sobre 30 °C efectivos (la humedad alta suma), con pérdida exponencial;
+  - cortes de agua y de alimento;
+  - salud: baja actividad sin causa aparente.
+- **El huevo tarda ~25 h en formarse:** la postura de hoy depende de las condiciones de ayer. La mortalidad y el consumo dependen del propio día.
+- **Además calcula:**
+  - peso del huevo (más pequeño con calor);
+  - mortalidad: base + calor extremo (sobre 36,5 °C) + sed prolongada;
+  - alimento y agua por ave: con calor comen menos y beben más;
+  - conversión alimenticia (kg de alimento / kg de huevo).
+- **Historial:** los 30 días previos se estiman hora a hora con el clima real de Open-Meteo (`past_days=31`). Las aves configuradas son las vivas hoy; hacia atrás se suman las muertes de cada día.
+- **Día en curso:** `FarmRuntime` pasa cada lote de telemetría al servicio (temperatura, humedad, niveles de agua y alimento, actividad). Los huevos del día se reparten durante la mañana (la mayoría, 4–5 h después del amanecer). Al cerrar el día queda su registro con el consumo real.
+- **Pantalla Producción:**
+  - huevos de hoy, postura, mortalidad, alimento y conversión;
+  - "¿Qué está afectando la postura hoy?": la pérdida de cada factor, en huevos, con un consejo;
+  - barras de huevos por día, postura frente a la esperada por edad y tabla de los últimos 7 días.
+  - El inicio muestra un resumen.
+- **Calibración:** los coeficientes son estimaciones de referencia para una demo realista. En Valledupar dan una postura de ~75–81 % y una conversión de ~2,0–2,2. Se ajustarán con datos reales del galpón.
+
+**Configuración** (`services/config`, Más → Configuración):
+- **Qué se configura:**
+  - nombre de la granja;
+  - ubicación, con búsqueda en Open-Meteo Geocoding (muestra el municipio para distinguir lugares homónimos);
+  - galpón: nombre, aves vivas y edad del lote;
+  - programa de luz: natural o con lámparas, y su horario;
+  - umbrales de ventilación, alertas de calor, bomba de agua y alimentador.
+- **Validación:** `validateConfig` revisa la coherencia con mensajes en español. Por ejemplo, la ventilación debe apagarse por debajo de la temperatura de encendido.
+- **Persistencia:** se guarda en el teléfono con AsyncStorage (`vigia.farmConfig.v1`). `startFarm` la carga al abrir la app. `applyFarmConfig` la guarda y reinicia la simulación con ella.
+- **Lectura desde la UI:** la UI lee la configuración del store (`config`), nunca del runtime durante el render.
+
+**Navegación:** pestañas Inicio, Gemelo, Producción, Alertas y Más. Control de equipos, Configuración y Modo demo están en Más.
+
+## 11. Modo demo
 
 `src/services/simulation/scenarios.ts` define los escenarios:
 - ola de calor
@@ -175,11 +211,11 @@ La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altit
 - baja actividad animal
 - sensor desconectado
 
-Los escenarios **modifican el modelo físico**, no los números que se muestran. Lo que se ve en pantalla es la respuesta real del motor. La velocidad de la simulación es configurable (tiempo real, 1 min/s o 5 min/s).
+Los escenarios **modifican el modelo físico**, no los números que se muestran. Lo que se ve en pantalla es la respuesta real del motor. La simulación corre en vivo o acelerada (1, 5 o 15 min/s). Un escenario también afecta la producción: una ola de calor hoy baja la postura de mañana.
 
 **Mientras no haya hardware**, el interior del galpón se simula, pero con el clima y el sol reales de la ubicación (fase 6).
 
-## 11. Preparación para hardware (fase 8, no implementado)
+## 12. Preparación para hardware (fase 8, no implementado)
 
 Los IDs ya tienen la forma necesaria para mapearse a tópicos MQTT:
 
@@ -197,7 +233,7 @@ Plan:
 
 **Decisión clave:** el control crítico (ventilación, agua) no puede depender de que el teléfono esté encendido. El ESP32 o un gateway tendrá un control básico de seguridad con umbrales locales, y el motor completo correrá en el servidor. La app supervisará y dará órdenes. El motor ya es TypeScript puro para poder moverlo sin reescribirlo.
 
-## 12. Backend (fase 9, no implementado)
+## 13. Backend (fase 9, no implementado)
 
 Supabase o Firebase para:
 - autenticación
@@ -207,9 +243,9 @@ Supabase o Firebase para:
 - notificaciones push de alertas críticas
 - ejecución del motor en el servidor
 
-La configuración de la granja que hoy está en `demoFarm.ts` pasará a venir de la base de datos.
+La configuración de la granja, que hoy se guarda en el teléfono (`services/config`), pasará a la base de datos junto con los registros de producción.
 
-## 13. Visión artificial (fase 11, no implementada)
+## 14. Visión artificial (fase 11, no implementada)
 
 Contrato previsto en `src/domain/vision/types.ts`:
 - **Detección de movimiento:** índice de movimiento por zona.
@@ -219,7 +255,7 @@ Contrato previsto en `src/domain/vision/types.ts`:
 
 El análisis de video se hará en un gateway local o en la nube, no en el teléfono. La app recibirá `VisionEvent`/`VisionInsights`, que se añadirán al `ZoneContext`, para que las reglas o la IA combinen visión y sensores (por ejemplo: baja actividad + aglomeración + temperatura alta → estrés térmico). El tipo de alerta `abnormalBehavior` ya está reservado.
 
-## 14. Hoja de ruta
+## 15. Hoja de ruta
 
 ### Bloque A: app completa sin hardware (todo simulado)
 | Fase | Contenido | Estado |
@@ -230,16 +266,10 @@ El análisis de video se hará en un gateway local o en la nube, no en el teléf
 | 3 | Motor de reglas + alertas + modo demo | ✅ |
 | 4 | Historial y gráficas (detalle por sensor, bandas, franjas de equipos, minigráficas, tabla por hora) | ✅ |
 | 5 | Gemelo digital 3D, representación funcional alimentada por la simulación | ✅ |
-| 6 | **Mundo real**: ubicación (Valledupar), sol y clima reales (Open-Meteo), gallinas con IA de NPC | ✅ (validar en teléfono) |
-| 7 | **Módulo de producción** + configuración (umbrales editables, programa de luz, ubicación y galpones) | ⏭️ Siguiente |
+| 6 | **Mundo real**: ubicación (Valledupar), sol y clima reales (Open-Meteo), gallinas con IA de NPC | ✅ |
+| 7 | **Producción** (postura, mortalidad, consumo, conversión y sus causas) + **configuración** persistente (ubicación, galpón, programa de luz, umbrales) | ✅ (validar en teléfono) |
 
-**Módulo de producción (fase 7):**
-- huevos por día y % de postura
-- mortalidad
-- consumo de alimento y de agua por ave
-- conversión alimenticia
-
-Al principio los datos serán simulados, afectados por el estrés térmico real, la disponibilidad de agua y alimento y las horas de luz reales (luz natural frente a programa de 16 h). Después se sumará el registro manual y más adelante el conteo automático.
+**Pendiente de producción:** registro manual de huevos recogidos y muertes, para comparar con lo estimado y calibrar el modelo. Más adelante, conteo automático (visión, fase 11).
 
 ### Bloque B: granja real (piloto)
 | Fase | Contenido | Estado |

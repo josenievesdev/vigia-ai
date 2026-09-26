@@ -2,6 +2,8 @@
 export interface FarmLocation {
   name: string;
   region: string;
+  /** Municipio, si se conoce: distingue lugares homónimos del mismo departamento. */
+  district?: string;
   country: string;
   latitude: number;
   longitude: number;

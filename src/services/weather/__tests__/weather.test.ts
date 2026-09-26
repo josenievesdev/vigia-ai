@@ -13,7 +13,7 @@ describe('Open-Meteo', () => {
     const url = buildOpenMeteoUrl(VALLEDUPAR);
     expect(url).toContain('latitude=10.46538');
     expect(url).toContain('longitude=-73.2531');
-    expect(url).toContain('past_days=1');
+    expect(url).toContain('past_days=31');
     expect(url).toContain('timeformat=unixtime');
     expect(url).toContain('timezone=America%2FBogota');
     expect(url).toContain('shortwave_radiation');

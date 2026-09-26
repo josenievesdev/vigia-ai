@@ -1,10 +1,11 @@
 import { lightState, NATURAL_LIGHT } from '@/domain/lighting';
-import { getSpeciesProfile } from '@/domain/profiles';
+import { getSpeciesProfile, type SpeciesProfile } from '@/domain/profiles';
 import type { Decision } from '@/domain/types';
 import { reconcileAlerts } from '@/engine/alerts/AlertManager';
 import { buildZoneContexts } from '@/engine/context';
 import type { DecisionEngine } from '@/engine/types';
 import type { HistoryRepository } from '@/services/history/HistoryRepository';
+import type { ProductionService } from '@/services/production/ProductionService';
 import { InMemoryHistory } from '@/services/history/InMemoryHistory';
 import type { FarmSetup } from '@/services/simulation/demoFarm';
 import type { ScenarioId } from '@/services/simulation/scenarios';
@@ -31,6 +32,10 @@ export interface FarmRuntimeOptions {
   primeSeconds?: number;
   /** Clima exterior real. Sin él se usa el clima sintético de respaldo. */
   weather?: WeatherService;
+  /** Producción (postura, mortalidad, consumo) del galpón principal. */
+  production?: ProductionService;
+  /** Perfil efectivo (especie + umbrales de la granja). Por defecto, el de la especie. */
+  profile?: SpeciesProfile;
 }
 
 /** Cada cuánto se refresca el clima real (Open-Meteo actualiza cada 15 min). */
@@ -63,7 +68,7 @@ export class FarmRuntime {
     const sim = this.simulation;
     farmActions.configure({
       farm: this.setup.farm,
-      profile: getSpeciesProfile(this.setup.farm.speciesId),
+      profile: this.options.profile ?? getSpeciesProfile(this.setup.farm.speciesId),
       sensors: this.setup.sensors,
       actuators: this.setup.actuators,
       sourceKind: this.source.kind,
@@ -78,6 +83,9 @@ export class FarmRuntime {
       if (generation !== this.generation) return;
       this.weatherTimer = setInterval(() => void weather.refresh(), WEATHER_REFRESH_MS);
     }
+
+    // Historial de producción del último mes (con el clima de esos días).
+    this.options.production?.backfill(sim?.currentTime ?? Date.now());
 
     this.unsubscribe = this.source.subscribe((batch) => this.handleBatch(batch));
     if (sim && this.options.primeSeconds && !this.primed) {
@@ -165,6 +173,7 @@ export class FarmRuntime {
     this.history.append(batch);
     farmActions.ingest(batch);
     this.publishEnvironment(batch.timestamp);
+    this.publishProduction(batch.timestamp);
     const s = farmStore.getState();
     if (!s.farm || !s.profile) return;
 
@@ -190,6 +199,32 @@ export class FarmRuntime {
         console.warn('[VigíaAI] No se pudo enviar el comando', command, error);
       });
     }
+  }
+
+  /** Pasa las condiciones actuales del galpón al servicio de producción. */
+  private publishProduction(now: number): void {
+    const production = this.options.production;
+    const zone = this.setup.farm.zones[0];
+    if (!production || !zone) return;
+    const s = farmStore.getState();
+    const value = (kind: string) => {
+      const id = `${zone.id}:${kind}`;
+      return s.sensorStatus[id]?.online ? s.readings[id]?.value : undefined;
+    };
+    const temperature = value('temperature');
+    const waterLevel = value('waterLevel');
+    const feedLevel = value('feedLevel');
+    const activity = value('animalActivity');
+    const lowActivity = s.profile?.alerts.lowActivity.warning ?? 35;
+    const sick =
+      Boolean(s.environment?.light.isLightPeriod) &&
+      activity !== undefined &&
+      activity < lowActivity &&
+      (temperature ?? 0) < 29 &&
+      (waterLevel ?? 100) >= 5 &&
+      (feedLevel ?? 100) >= 5;
+    production.onSample(now, { temperature, humidity: value('humidity'), waterLevel, feedLevel, sick });
+    farmActions.setProduction(production.snapshot());
   }
 
   /** Clima exterior y sol en la hora actual de la granja, para la UI. */

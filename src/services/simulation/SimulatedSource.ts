@@ -171,6 +171,11 @@ export class SimulatedSource implements TelemetrySource {
     this.emit();
   }
 
+  /** Hora actual de la simulación. */
+  get currentTime(): Timestamp {
+    return this.time;
+  }
+
   get activeScenarios(): ReadonlySet<ScenarioId> {
     return this.scenarios;
   }

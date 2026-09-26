@@ -28,6 +28,9 @@ export const VALLEDUPAR: FarmLocation = {
 };
 
 const FARM_ID = 'farm-el-paraiso';
+const WEEK_MS = 7 * 24 * 3600_000;
+/** Lote de 38 semanas: plena postura. */
+export const DEMO_FLOCK_AGE_WEEKS = 38;
 const ZONE_ID = 'zone-galpon-1';
 const DEVICE_ID = 'esp32-galpon-1';
 
@@ -47,7 +50,16 @@ export const demoFarmSetup: FarmSetup = {
     name: 'Granja El Paraíso',
     speciesId: 'layingHens',
     location: VALLEDUPAR,
-    zones: [{ id: ZONE_ID, farmId: FARM_ID, name: 'Galpón 1', population: 1200, lighting: NATURAL_LIGHT }],
+    zones: [
+      {
+        id: ZONE_ID,
+        farmId: FARM_ID,
+        name: 'Galpón 1',
+        population: 1200,
+        lighting: NATURAL_LIGHT,
+        hatchDate: Date.now() - DEMO_FLOCK_AGE_WEEKS * WEEK_MS,
+      },
+    ],
   },
   sensors: sensorKinds.map((kind) => ({
     id: `${ZONE_ID}:${kind}`,

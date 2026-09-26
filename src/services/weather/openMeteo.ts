@@ -27,7 +27,8 @@ export function buildOpenMeteoUrl(location: FarmLocation): string {
     `longitude=${location.longitude}`,
     `current=${VARIABLES.join(',')}`,
     `hourly=${VARIABLES.join(',')}`,
-    'past_days=1',
+    // 31 días: 24 h para la simulación y un mes para el historial de producción.
+    'past_days=31',
     'forecast_days=2',
     'timeformat=unixtime',
     `timezone=${encodeURIComponent(location.timezone)}`,

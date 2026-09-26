@@ -47,7 +47,7 @@ export function DemoScreen() {
 
   if (!simulation || switching) {
     return (
-      <Screen title="Modo demo">
+      <Screen topInset={false}>
         <Card style={styles.loading}>
           <ActivityIndicator />
           <AppText muted>Preparando la simulación y el clima…</AppText>
@@ -60,7 +60,7 @@ export function DemoScreen() {
   const updatedAt = environment?.weatherUpdatedAt;
 
   return (
-    <Screen title="Modo demo" subtitle="Simula eventos para ver la respuesta automática del sistema">
+    <Screen topInset={false} subtitle="Simula eventos para ver la respuesta automática del sistema">
       <Card style={styles.section}>
         <SectionHeader title="Modo de simulación" />
         <Segmented value={simulation.mode} onChange={changeMode} options={MODES} />

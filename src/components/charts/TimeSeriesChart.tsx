@@ -22,6 +22,10 @@ interface TimeSeriesChartProps {
   strips?: ActuatorTrack[];
   plotHeight?: number;
   accessibilityLabel: string;
+  /** Línea de referencia horizontal (p. ej. valor esperado), explicada con su etiqueta. */
+  reference?: { value: number; label: string };
+  /** Formato de las marcas de tiempo y del tooltip (por defecto HH:MM). */
+  formatTime?: (time: number) => string;
 }
 
 const MARGIN = { left: 38, right: 10, top: 8 };
@@ -63,6 +67,8 @@ export function TimeSeriesChart({
   strips = [],
   plotHeight = 180,
   accessibilityLabel,
+  reference,
+  formatTime = formatClock,
 }: TimeSeriesChartProps) {
   const c = useTheme();
   const [width, setWidth] = useState(0);
@@ -84,8 +90,8 @@ export function TimeSeriesChart({
     yTicks = niceDomain(fixedDomain[0], fixedDomain[1]).ticks.filter((v) => v >= domain[0] && v <= domain[1]);
   } else {
     const optimal = bands.find((b) => b.kind === 'optimal');
-    let lo = Math.min(...finite.map((p) => p.v), optimal?.from ?? Infinity);
-    let hi = Math.max(...finite.map((p) => p.v), optimal?.to ?? -Infinity);
+    let lo = Math.min(...finite.map((p) => p.v), optimal?.from ?? Infinity, reference?.value ?? Infinity);
+    let hi = Math.max(...finite.map((p) => p.v), optimal?.to ?? -Infinity, reference?.value ?? -Infinity);
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
       lo = 0;
       hi = 1;
@@ -150,11 +156,19 @@ export function TimeSeriesChart({
             const anchor = px - x0 < 18 ? 'start' : x1 - px < 18 ? 'end' : 'middle';
             return (
               <SvgText key={`xtick-${t}`} x={px} y={yBottom + 15} fontSize={10} fontFamily={CHART_FONT} fill={c.textMuted} textAnchor={anchor}>
-                {formatClock(t)}
+                {formatTime(t)}
               </SvgText>
             );
           })}
 
+          {reference ? (
+            <>
+              <Line x1={x0} x2={x1} y1={y(reference.value)} y2={y(reference.value)} stroke={c.textMuted} strokeWidth={1} strokeOpacity={0.7} />
+              <SvgText x={x1 - 4} y={y(reference.value) - 4} fontSize={10} fontFamily={CHART_FONT} fill={c.textMuted} textAnchor="end">
+                {reference.label}
+              </SvgText>
+            </>
+          ) : null}
           <Path d={linePath} stroke={c.chartLine} strokeWidth={2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
           {lonePoints.map((p) => (
             <Circle key={`lone-${p.t}`} cx={x(p.t)} cy={y(p.v)} r={2} fill={c.chartLine} />
@@ -239,7 +253,7 @@ export function TimeSeriesChart({
           ]}>
           <AppText variant="heading">{formatValue(cursor.v)}</AppText>
           <AppText variant="caption" muted>
-            {formatClock(cursor.t)}
+            {formatTime(cursor.t)}
           </AppText>
           {strips.map((strip) => (
             <AppText key={strip.id} variant="caption" muted>

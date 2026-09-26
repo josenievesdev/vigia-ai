@@ -23,10 +23,10 @@ export function Screen({ topInset = true, title, subtitle, headerRight, children
       edges={topInset ? ['top', 'left', 'right'] : ['left', 'right']}
       style={[styles.root, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
-        {title ? (
+        {title || subtitle ? (
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <AppText variant="title">{title}</AppText>
+              {title ? <AppText variant="title">{title}</AppText> : null}
               {subtitle ? <AppText muted>{subtitle}</AppText> : null}
             </View>
             {headerRight}

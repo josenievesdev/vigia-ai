@@ -57,4 +57,7 @@ Docs: https://docs.expo.dev/eas/index.md
 - React Compiler memoizes plain function calls made during render: never call `getFarmRuntime()` in a component/hook body (it would keep pointing to an old runtime after a mode switch). Call it inside event handlers; for history use the stable `getFarmHistory()`.
 - Real world (phase 6): sun/light come from `domain/solar.ts` + `domain/lighting.ts` (never fixed hours); outside weather only via `WeatherService` (Open-Meteo free tier is NON-commercial; keep the attribution visible). Tests run with TZ=America/Bogota (jest.global-setup.js).
 - Animal behavior lives in `domain/behavior` (pure, tested); the 3D layer only maps actions to poses.
+- Production (phase 7): the model lives in `domain/production` (pure, tested); `ProductionService` is fed by `FarmRuntime` with each telemetry batch. A day's laying depends on the PREVIOUS day's conditions (egg formation ~25 h). The configured population = hens alive today (the 30-day backfill adds deaths going backwards).
+- Farm configuration: `services/config` (validated with `validateConfig`, stored with AsyncStorage). It is loaded by `startFarm()` and changed only through `applyFarmConfig()` (validates, saves, restarts the runtime). UI reads `config` from the store. A restart resets the store (`now` becomes null for a moment), so screens that stay open across it must not unmount their forms.
+- Show user-facing numbers with `utils/format.ts` (`formatCount` → "1.200", `formatPercent`, `formatWeekday`).
 - Before finishing: `npm test`, `npx tsc --noEmit`, `npx expo lint`.

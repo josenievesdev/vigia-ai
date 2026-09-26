@@ -65,3 +65,15 @@ export function lightState(time: Timestamp, location: FarmLocation, program: Lig
     sun: sunTimes(time, latitude, longitude),
   };
 }
+
+/** Horas de luz para las aves en el día local de `time` (luz natural y, si hay programa, lámparas). */
+export function lightHoursForDay(time: Timestamp, location: FarmLocation, program: LightingProgram): number {
+  const window = sunCrossings(time, location.latitude, location.longitude, 90 - DAYLIGHT_ELEVATION);
+  let start = window?.rise ?? atLocalHour(time, 6);
+  let end = window?.set ?? atLocalHour(time, 18);
+  if (program.type === 'extended') {
+    start = Math.min(start, atLocalHour(time, program.startHour));
+    end = Math.max(end, atLocalHour(time, program.endHour));
+  }
+  return (end - start) / 3_600_000;
+}

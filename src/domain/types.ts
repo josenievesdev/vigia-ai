@@ -34,6 +34,8 @@ export interface Zone {
   population: number;
   /** Programa de iluminación (por defecto, solo luz natural). */
   lighting?: LightingProgram;
+  /** Fecha de nacimiento del lote (para la edad y la curva de postura). */
+  hatchDate?: Timestamp;
 }
 
 // ---------------------------------------------------------------------------

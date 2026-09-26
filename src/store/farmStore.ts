@@ -16,6 +16,8 @@ import type {
   SensorStatus,
   Timestamp,
 } from '@/domain/types';
+import type { FarmConfig } from '@/services/config/farmConfig';
+import type { ProductionSnapshot } from '@/services/production/ProductionService';
 import type { ScenarioId } from '@/services/simulation/scenarios';
 import type { SimulationClock } from '@/services/simulation/SimulatedSource';
 import type { TelemetryBatch, TelemetrySourceKind } from '@/services/telemetry/TelemetrySource';
@@ -68,6 +70,9 @@ export interface FarmState {
 
   simulation: SimulationState | null;
   environment: EnvironmentView | null;
+  production: ProductionSnapshot | null;
+  /** Configuración editable vigente (granja, galpón, luz, umbrales). */
+  config: FarmConfig | null;
 }
 
 const initialState: FarmState = {
@@ -87,6 +92,8 @@ const initialState: FarmState = {
   decisions: [],
   simulation: null,
   environment: null,
+  production: null,
+  config: null,
 };
 
 /**
@@ -166,5 +173,13 @@ export const farmActions = {
 
   setEnvironment(environment: EnvironmentView) {
     farmStore.setState({ environment });
+  },
+
+  setProduction(production: ProductionSnapshot) {
+    farmStore.setState({ production });
+  },
+
+  setConfig(config: FarmConfig) {
+    farmStore.setState({ config });
   },
 };

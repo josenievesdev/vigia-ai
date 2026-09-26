@@ -1,5 +1,29 @@
 import type { ActuatorKind, SensorKind, SpeciesId } from '@/domain/types';
 
+/**
+ * Referencias productivas de la especie. Curvas aproximadas de líneas
+ * comerciales de ponedoras; cada granja podrá ajustarlas a su genética.
+ */
+export interface ProductionProfile {
+  /** Postura esperada en condiciones ideales según la edad: [semanas, fracción 0–1]. */
+  layingCurve: [number, number][];
+  /** Peso medio del huevo según la edad: [semanas, gramos]. */
+  eggWeightCurve: [number, number][];
+  /** Horas de luz con las que se alcanza la postura máxima. */
+  optimalLightHours: number;
+  /** Pérdida de postura por cada hora de luz que falta (fracción). */
+  lossPerMissingLightHour: number;
+  /** Temperatura efectiva (°C) a partir de la cual el calor reduce la postura. */
+  heatThreshold: number;
+  /** Pérdida por grado-hora sobre el umbral (coeficiente exponencial). */
+  heatLossPerDegreeHour: number;
+  /** Consumo de referencia por ave y día a 21 °C. */
+  feedGramsPerBird: number;
+  waterMlPerBird: number;
+  /** Mortalidad diaria de base (fracción del lote). */
+  dailyMortality: number;
+}
+
 /** Rango con límites de advertencia y críticos. */
 export interface Band {
   warning: number;
@@ -54,6 +78,9 @@ export interface SpeciesProfile {
     /** Fotoperiodo en horas del día [inicio, fin). */
     photoperiod: { startHour: number; endHour: number };
   };
+
+  /** Referencias de producción (postura, peso, consumo, mortalidad). */
+  production: ProductionProfile;
 
   /** Consumo por animal y día, usado por la simulación y futuras proyecciones. */
   consumption: {

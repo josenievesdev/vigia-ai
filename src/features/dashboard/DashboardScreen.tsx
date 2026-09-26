@@ -5,11 +5,12 @@ import { AlertCard } from '@/features/alerts/components/AlertCard';
 import { formatLocation } from '@/domain/location';
 import { DecisionItem } from '@/features/automation/components/DecisionItem';
 import { OutsideCard } from '@/features/environment/OutsideCard';
+import { ProductionCard } from '@/features/production/components/ProductionCard';
 import { useFarmClock } from '@/hooks/use-farm-clock';
 import { useFarmStore } from '@/store/useFarmStore';
 import { useActuators, useHealth, usePrimaryZone } from '@/store/selectors';
 import { Spacing } from '@/theme';
-import { formatClock } from '@/utils/format';
+import { formatClock, formatCount } from '@/utils/format';
 
 import { DemoBanner } from './components/DemoBanner';
 import { EnvironmentGrid } from './components/EnvironmentGrid';
@@ -23,6 +24,8 @@ export function DashboardScreen() {
   const sourceKind = useFarmStore((s) => s.sourceKind);
   const alerts = useFarmStore((s) => s.alerts);
   const decisions = useFarmStore((s) => s.decisions);
+  // Aves vivas hoy (descuenta la mortalidad del día); antes del primer dato, las configuradas.
+  const liveHens = useFarmStore((s) => s.production?.today?.hens);
   const zone = usePrimaryZone();
   const actuators = useActuators(zone?.id);
   const health = useHealth();
@@ -42,7 +45,7 @@ export function DashboardScreen() {
   return (
     <Screen
       title={farm.name}
-      subtitle={`${formatLocation(farm.location)} · ${zone.name} · ${zone.population.toLocaleString('es')} ${profile.populationNoun}`}
+      subtitle={`${formatLocation(farm.location)} · ${zone.name} · ${formatCount(liveHens ?? zone.population)} ${profile.populationNoun}`}
       headerRight={
         <Badge
           label={sourceKind === 'simulation' ? 'Simulación' : 'En vivo'}
@@ -64,6 +67,7 @@ export function DashboardScreen() {
         />
       </View>
 
+      <ProductionCard />
       <SuppliesCard zoneId={zone.id} profile={profile} actuators={actuators} />
       <SystemsCard actuators={actuators} />
 

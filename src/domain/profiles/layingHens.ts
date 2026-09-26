@@ -34,6 +34,38 @@ export const layingHensProfile: SpeciesProfile = {
     photoperiod: { startHour: 5, endHour: 21 },
   },
 
+  production: {
+    layingCurve: [
+      [18, 0.05],
+      [20, 0.5],
+      [22, 0.85],
+      [25, 0.94],
+      [30, 0.95],
+      [40, 0.92],
+      [50, 0.89],
+      [60, 0.85],
+      [70, 0.8],
+      [80, 0.75],
+    ],
+    eggWeightCurve: [
+      [20, 48],
+      [25, 56],
+      [30, 59],
+      [40, 62],
+      [50, 63.5],
+      [60, 64.5],
+      [70, 65],
+    ],
+    optimalLightHours: 16,
+    lossPerMissingLightHour: 0.02,
+    // Lote aclimatado al trópico: el calor resta postura sobre ~30 °C efectivos.
+    heatThreshold: 30,
+    heatLossPerDegreeHour: 0.003,
+    feedGramsPerBird: 110,
+    waterMlPerBird: 220,
+    dailyMortality: 0.0002,
+  },
+
   consumption: {
     waterLitersPerDay: 0.25,
     feedKgPerDay: 0.115,

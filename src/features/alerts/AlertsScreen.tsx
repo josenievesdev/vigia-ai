@@ -39,7 +39,7 @@ export function AlertsScreen() {
             title={tab === 'active' ? 'Sin alertas activas' : 'Sin alertas resueltas'}
             message={
               tab === 'active'
-                ? 'La granja opera dentro de los rangos configurados. Prueba un escenario en la pestaña Demo.'
+                ? 'La granja opera dentro de los rangos configurados. Prueba un escenario en Más → Modo demo.'
                 : 'Las alertas resueltas aparecerán aquí.'
             }
           />
