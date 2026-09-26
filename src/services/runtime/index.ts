@@ -23,10 +23,24 @@ export { FarmRuntime } from './FarmRuntime';
 
 const baseProfile = getSpeciesProfile(demoFarmSetup.farm.speciesId);
 
+/** Dónde vive la configuración de la granja: en el teléfono (demo) o en Supabase (granja real). */
+export interface ConfigStore {
+  load(): Promise<FarmConfig>;
+  save(config: FarmConfig): Promise<void>;
+}
+
+/** Configuración guardada en el teléfono: la del modo demo. */
+export const localConfigStore: ConfigStore = {
+  load: () => loadConfig(baseProfile),
+  save: saveConfig,
+};
+
 let mode: SimulationClock = 'live';
 let runtime: FarmRuntime | null = null;
 let config: FarmConfig = defaultConfig(baseProfile);
-let configLoaded = false;
+let store: ConfigStore = localConfigStore;
+/** Invalida arranques en curso si llega otra orden (cerrar sesión, cambiar de granja). */
+let generation = 0;
 
 /**
  * Historial único (se limpia al reiniciar). Al ser siempre el mismo objeto, la UI
@@ -85,16 +99,23 @@ async function restart(): Promise<void> {
   await runtime.start();
 }
 
-/** Arranque de la app: carga la configuración guardada y pone en marcha la granja. */
-export async function startFarm(): Promise<void> {
-  if (!configLoaded) {
-    config = await loadConfig(baseProfile);
-    configLoaded = true;
-    runtime?.stop();
-    runtime = null;
-  }
-  farmActions.setConfig(config);
-  await getFarmRuntime().start();
+/** Pone en marcha la granja con la configuración de `source` (por defecto, la del teléfono). */
+export async function startFarm(source: ConfigStore = localConfigStore): Promise<void> {
+  const current = ++generation;
+  const next = await source.load();
+  if (current !== generation) return;
+  store = source;
+  config = next;
+  await restart();
+}
+
+/** Detiene la simulación (al cerrar sesión o si la cuenta queda bloqueada). */
+export function stopFarm(): void {
+  generation++;
+  runtime?.stop();
+  runtime = null;
+  history.clear();
+  farmActions.reset();
 }
 
 /**
@@ -107,11 +128,11 @@ export async function setSimulationMode(next: SimulationClock): Promise<void> {
   await restart();
 }
 
-/** Guarda y aplica una configuración nueva (reinicia la simulación con ella). */
+/** Guarda (en el teléfono o en Supabase) y aplica una configuración nueva: reinicia la simulación. */
 export async function applyFarmConfig(next: FarmConfig): Promise<void> {
   const errors = validateConfig(next);
   if (errors.length) throw new Error(errors.join(' '));
-  await saveConfig(next);
+  await store.save(next);
   config = next;
   await restart();
 }

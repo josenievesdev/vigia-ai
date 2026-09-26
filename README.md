@@ -8,7 +8,7 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 
 **Enfoque inicial:** gallinas ponedoras. La arquitectura admite otras especies y cultivos mediante *perfiles productivos*.
 
-## Estado actual (fases 0–7)
+## Estado actual (fases 0–7 y 9a)
 
 | Módulo | Estado |
 |---|---|
@@ -24,8 +24,10 @@ Plataforma móvil de monitoreo y automatización inteligente de granjas.
 | Mundo real: Valledupar, sol calculado localmente, clima real de Open-Meteo, modos en vivo/acelerado | ✅ |
 | Gallinas con IA de NPC (utilidad + steering): duermen al ocultarse el sol, jadean con calor, se agolpan sin agua… | ✅ |
 | Producción: huevos, % de postura, mortalidad, alimento y agua por ave, conversión, y qué la está afectando (calor, luz, agua…) | ✅ |
-| Configuración guardada en el teléfono: granja, ubicación, galpón, edad del lote, programa de luz y umbrales | ✅ |
-| Hardware (MQTT/ESP32), servidor, IA, visión artificial | Fases 8–11 |
+| Configuración de la granja: ubicación, galpón, edad del lote, programa de luz y umbrales | ✅ |
+| Cuentas (Supabase): ingreso con cédula, administrador / instalador / cliente, suscripción con bloqueo en la base de datos, demo sin cuenta | ✅ |
+| Registro diario de producción real | Fase 9b — siguiente |
+| Hardware (MQTT/ESP32), resto del servidor, IA, visión artificial | Fases 8, 9c, 10 y 11 |
 
 Sin hardware todavía: el interior del galpón se simula, alimentado por el **clima y el sol reales** de la ubicación (Valledupar por defecto; Open-Meteo, uso no comercial). La simulación arranca con 24 h de historia; la producción, con 30 días estimados con el clima real del último mes.
 
@@ -34,10 +36,27 @@ Sin hardware todavía: el interior del galpón se simula, alimentado por el **cl
 ```bash
 npm install
 npx expo start        # abre en Expo Go (escanear QR) o pulsa w para web
-npm test              # pruebas del motor y la simulación
+npm test              # pruebas (sin red)
 npm run typecheck     # TypeScript
 npm run lint          # ESLint
 ```
+
+### Servidor (Supabase)
+
+Sin `.env` la app funciona solo con "Ver demo sin cuenta". Para las cuentas:
+
+1. Copiar `.env.example` como `.env` y completarlo. `.env` nunca se sube: el repositorio es público.
+2. Preparar el servidor:
+
+```bash
+npm run db:push            # crea las tablas y las reglas de acceso (supabase/migrations)
+npm run functions:deploy   # publica la función que crea las cuentas (manage-users)
+npm run db:seed-admin      # crea el primer administrador (ADMIN_CEDULA de .env)
+npm run test:live          # opcional: prueba permisos y flujos contra Supabase con usuarios temporales
+```
+
+3. Ingresar con la cédula del administrador (la contraseña inicial es la misma cédula; la app pide cambiarla).
+4. Desde **Más → Clientes e instaladores** se crean las cuentas de clientes (con su granja) e instaladores.
 
 ## Estructura
 
@@ -53,13 +72,19 @@ src/
 │   ├── weather/      # Clima real (Open-Meteo) + respaldo sintético + búsqueda de lugares
 │   ├── production/   # ProductionService: historial de 30 días + día en curso
 │   ├── config/       # Configuración de la granja: validación y guardado en el teléfono
+│   ├── account/      # Cuentas: identidad por cédula, suscripción, acceso, operaciones con Supabase
 │   └── runtime/      # FarmRuntime: orquesta fuente → motor → producción → store
-├── store/            # Estado global (Zustand) y selectores
-├── features/         # Pantallas por módulo (dashboard, twin, production, alerts, more, settings, automation, demo…)
+├── lib/              # Cliente de Supabase
+├── store/            # Estado global (Zustand): granja y sesión
+├── features/         # Pantallas por módulo (dashboard, twin, production, alerts, more, settings, account, accounts…)
 ├── components/ui/    # Sistema de componentes reutilizables
 ├── components/charts/# Gráficas SVG (serie temporal, barras, minigráfica)
 ├── theme/            # Tokens de color (claro/oscuro), espaciado
 ├── hooks/, utils/
+supabase/
+├── migrations/       # Esquema de la base de datos y reglas de acceso (RLS), en orden
+└── functions/        # Edge Functions (Deno): manage-users crea y gestiona cuentas
+scripts/              # Comandos del servidor (migraciones, funciones, primer administrador)
 ```
 
 Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el detalle.

@@ -54,6 +54,11 @@ export function formatPercent(fraction: number, digits = 0): string {
   return `${(fraction * 100).toFixed(digits)} %`;
 }
 
+/** Cédula como se escribe en Colombia: "1.065.123.456". */
+export function formatNationalId(nationalId: string): string {
+  return nationalId.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 /** Número con separador de miles en español: "1.200". */
 export function formatCount(value: number): string {
   return Math.round(value)

@@ -202,7 +202,62 @@ La granja demo está en **Valledupar, Cesar** (`demoFarm.ts`: coordenadas, altit
 
 **Navegación:** pestañas Inicio, Gemelo, Producción, Alertas y Más. Control de equipos, Configuración y Modo demo están en Más.
 
-## 11. Modo demo
+## 11. Cuentas y suscripción (fase 9a)
+
+Supabase: Postgres, Auth y reglas de acceso por fila (RLS). El esquema vive en `supabase/migrations/`.
+
+**Roles:**
+- **Administrador:** ve y gestiona todo: clientes, instaladores y pagos.
+- **Instalador:** al terminar la instalación crea la cuenta del cliente con su granja y su galpón. Ve y da soporte a las granjas que instaló.
+- **Cliente:** el dueño de la granja. Ve y configura solo lo suyo, y solo con la suscripción al día.
+
+**Tablas:**
+- `profiles`: usuario (nombre, cédula, celular, correo, municipio, rol, pagado hasta).
+- `farms`: dueño, instalador y ubicación.
+- `zones`: galpones (aves, nacimiento del lote, programa de luz, umbrales).
+
+**Ingreso:**
+- El usuario es la cédula. La contraseña inicial es la misma cédula y se cambia obligatoriamente en el primer ingreso, porque la cédula no es secreta.
+- Supabase Auth trabaja con correo, así que cada usuario tiene un alias interno `<cédula>@vigia.local`. El correo real va en el perfil.
+- El registro público está desactivado: las cuentas solo se crean desde la app, por el administrador o un instalador.
+
+**Seguridad en la base de datos (RLS), no solo en la app:**
+- Sin sesión no se ve nada.
+- El cliente ve su perfil y su granja. Con la suscripción vencida, la base de datos deja de entregarle la granja.
+- El instalador ve los clientes que creó y sus granjas.
+- Rol, cédula, pagos y dueños solo cambian por funciones controladas. Por ejemplo, `set_paid_until` verifica que quien llama sea el administrador.
+- Las funciones de apoyo de las políticas viven en el esquema `private`, que la API no expone.
+
+**Crear cuentas:**
+- Necesita la clave secreta del proyecto, que nunca va en la app. Por eso lo hace la Edge Function `manage-users`, que verifica el rol de quien la llama.
+- Acciones: crear cliente con granja, crear instalador (solo el administrador), restablecer contraseña y eliminar (solo el administrador).
+- Perfil, granja y galpón se crean en una sola transacción (`provision_client`).
+
+**Suscripción:**
+- Cada cliente tiene `paid_until`. La cuenta nueva trae 30 días.
+- El administrador registra pagos (+1 mes) o bloquea. Las fechas se cuentan en hora de Colombia.
+
+**En la app:**
+- `src/lib/supabase.ts`: el cliente de Supabase. Guarda la sesión con AsyncStorage y se crea en el primer uso, porque el render estático de la web corre en Node.
+- `src/services/account/`: la lógica pura y probada (identidad, suscripción, acceso, conversión entre filas y configuración). También `api.ts`, con las operaciones y los mensajes de error en español.
+- `src/features/account/session.ts`: la sesión y qué granja corre en la simulación.
+  - El cliente ve su granja, cargada desde Supabase.
+  - "Ver demo" y el administrador o instalador usan la granja demo del teléfono, hasta abrir la de un cliente desde Clientes.
+- La navegación usa `Stack.Protected`: cada grupo de pantallas existe solo en su estado (ingreso, cambio de contraseña, suscripción vencida o app). Clientes solo existe para el administrador y los instaladores.
+- Sin señal, la app abre con la última copia del perfil y la granja guardada en el teléfono. Al volver la señal, se sincroniza.
+- Mientras no haya sensores, la granja del cliente sigue simulada, con la etiqueta "Simulación", pero con su configuración real.
+
+**Operación** (con `.env` creado desde `.env.example`, fuera del repositorio):
+
+| Comando | Qué hace |
+|---|---|
+| `npm run db:push` | Aplica las migraciones pendientes (por el pooler) |
+| `npm run functions:deploy` | Publica las Edge Functions |
+| `npm run db:types` | Regenera los tipos de TypeScript de la base de datos |
+| `npm run db:seed-admin` | Crea el primer administrador |
+| `npm run test:live` | Pruebas de integración contra Supabase con usuarios temporales, que se borran al final |
+
+## 12. Modo demo
 
 `src/services/simulation/scenarios.ts` define los escenarios:
 - ola de calor
@@ -215,7 +270,7 @@ Los escenarios **modifican el modelo físico**, no los números que se muestran.
 
 **Mientras no haya hardware**, el interior del galpón se simula, pero con el clima y el sol reales de la ubicación (fase 6).
 
-## 12. Preparación para hardware (fase 8, no implementado)
+## 13. Preparación para hardware (fase 8, no implementado)
 
 Los IDs ya tienen la forma necesaria para mapearse a tópicos MQTT:
 
@@ -233,19 +288,22 @@ Plan:
 
 **Decisión clave:** el control crítico (ventilación, agua) no puede depender de que el teléfono esté encendido. El ESP32 o un gateway tendrá un control básico de seguridad con umbrales locales, y el motor completo correrá en el servidor. La app supervisará y dará órdenes. El motor ya es TypeScript puro para poder moverlo sin reescribirlo.
 
-## 13. Backend (fase 9, no implementado)
+## 14. Backend (fase 9: 9a hecha, el resto pendiente)
 
-Supabase o Firebase para:
+Supabase. Ya está hecho (9a, sección 11):
 - autenticación
-- granjas y dispositivos por usuario o integrador (vista de varias granjas)
+- granjas por cliente, instalador y administrador
+- configuración de la granja en la base de datos
+- suscripción
+
+Pendiente:
+- registro diario de producción real (9b)
 - histórico de lecturas (nueva implementación de `HistoryRepository`)
 - persistencia de alertas y decisiones
 - notificaciones push de alertas críticas
-- ejecución del motor en el servidor
+- ejecución del motor en el servidor y dispositivos (con el hardware)
 
-La configuración de la granja, que hoy se guarda en el teléfono (`services/config`), pasará a la base de datos junto con los registros de producción.
-
-## 14. Visión artificial (fase 11, no implementada)
+## 15. Visión artificial (fase 11, no implementada)
 
 Contrato previsto en `src/domain/vision/types.ts`:
 - **Detección de movimiento:** índice de movimiento por zona.
@@ -255,7 +313,7 @@ Contrato previsto en `src/domain/vision/types.ts`:
 
 El análisis de video se hará en un gateway local o en la nube, no en el teléfono. La app recibirá `VisionEvent`/`VisionInsights`, que se añadirán al `ZoneContext`, para que las reglas o la IA combinen visión y sensores (por ejemplo: baja actividad + aglomeración + temperatura alta → estrés térmico). El tipo de alerta `abnormalBehavior` ya está reservado.
 
-## 15. Hoja de ruta
+## 16. Hoja de ruta
 
 ### Bloque A: app completa sin hardware (todo simulado)
 | Fase | Contenido | Estado |
@@ -275,7 +333,9 @@ El análisis de video se hará en un gateway local o en la nube, no en el teléf
 | Fase | Contenido | Estado |
 |---|---|---|
 | 8 | Hardware: ESP32 + sensores + relés vía MQTT; control de seguridad local | Pendiente (sin hardware aún) |
-| 9 | Servidor: usuarios, historial persistente, push, multi-granja, motor en servidor, proxy de clima con licencia comercial | Pendiente |
+| 9a | Cuentas: ingreso con cédula, roles (administrador, instalador, cliente), granjas en Supabase, suscripción con bloqueo en la base de datos | ✅ (validar en teléfono) |
+| 9b | Registro diario de producción real (lo esperado por el modelo pasa a ser la referencia) | ⏭️ Siguiente |
+| 9c | Historial persistente, push, panel de la empresa, motor en servidor, proxy de clima con licencia comercial | Pendiente |
 
 ### Bloque C: inteligencia
 | Fase | Contenido | Estado |

@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Spacing, useTheme } from '@/theme';
 
 import { AppText } from './AppText';
+import { KeyboardAwareScroll } from './KeyboardAwareScroll';
 
 interface ScreenProps {
   /** false cuando la pantalla ya tiene encabezado de navegación (Stack). */
@@ -15,14 +16,14 @@ interface ScreenProps {
   children: ReactNode;
 }
 
-/** Contenedor estándar de pantalla: área segura, encabezado y scroll. */
+/** Contenedor estándar de pantalla: área segura, encabezado y scroll que respeta el teclado. */
 export function Screen({ topInset = true, title, subtitle, headerRight, children }: ScreenProps) {
   const c = useTheme();
   return (
     <SafeAreaView
       edges={topInset ? ['top', 'left', 'right'] : ['left', 'right']}
       style={[styles.root, { backgroundColor: c.background }]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScroll contentContainerStyle={styles.content}>
         {title || subtitle ? (
           <View style={styles.header}>
             <View style={styles.headerText}>
@@ -33,7 +34,7 @@ export function Screen({ topInset = true, title, subtitle, headerRight, children
           </View>
         ) : null}
         {children}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

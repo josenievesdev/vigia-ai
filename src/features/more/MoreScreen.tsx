@@ -2,10 +2,26 @@ import { type Href, router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Card, Icon, type IconName, Screen } from '@/components/ui';
+import { AccountCard } from '@/features/account/components/AccountCard';
 import { WEATHER_ATTRIBUTION } from '@/services/weather/types';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Radius, Spacing, useTheme } from '@/theme';
 
-const ITEMS: { href: Href; icon: IconName; title: string; description: string }[] = [
+interface Item {
+  href: Href;
+  icon: IconName;
+  title: string;
+  description: string;
+}
+
+const ACCOUNTS_ITEM: Item = {
+  href: '/accounts',
+  icon: 'account-group-outline',
+  title: 'Clientes',
+  description: 'Crear cuentas con su granja, abrir granjas de clientes y restablecer contraseñas.',
+};
+
+const ITEMS: Item[] = [
   {
     href: '/automation',
     icon: 'tune-variant',
@@ -28,10 +44,24 @@ const ITEMS: { href: Href; icon: IconName; title: string; description: string }[
 
 export function MoreScreen() {
   const c = useTheme();
+  const role = useAuthStore((s) => s.profile?.role);
+  const staff = role === 'admin' || role === 'installer';
+  const items = staff
+    ? [
+        {
+          ...ACCOUNTS_ITEM,
+          title: role === 'admin' ? 'Clientes e instaladores' : 'Mis clientes',
+          description: role === 'admin' ? `${ACCOUNTS_ITEM.description} Registrar pagos.` : ACCOUNTS_ITEM.description,
+        },
+        ...ITEMS,
+      ]
+    : ITEMS;
+
   return (
     <Screen title="Más">
+      <AccountCard />
       <Card style={styles.list}>
-        {ITEMS.map((item, i) => (
+        {items.map((item, i) => (
           <Pressable
             key={item.title}
             onPress={() => router.push(item.href)}
@@ -58,8 +88,8 @@ export function MoreScreen() {
       <Card style={styles.about}>
         <AppText variant="heading">Acerca de VigíaAI</AppText>
         <AppText variant="caption" muted>
-          Monitoreo y automatización de granjas. Versión de demostración: el interior del galpón se simula con el clima
-          y el sol reales de la ubicación.
+          Monitoreo y automatización de granjas. Mientras no haya sensores instalados, el interior del galpón se simula
+          con el clima y el sol reales de la ubicación.
         </AppText>
         <AppText variant="caption" muted>
           {WEATHER_ATTRIBUTION}. Uso no comercial.

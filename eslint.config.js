@@ -5,7 +5,8 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // supabase/functions es código Deno (Edge Functions): no es parte de la app.
+    ignores: ["dist/*", "supabase/functions/**"],
   },
   {
     // React Three Fiber usa props de three.js (position, args, intensity…) que esta regla no conoce.

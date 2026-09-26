@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { AppText, Badge, Card, EmptyState, Screen, SectionHeader } from '@/components/ui';
+import { AccountBanner } from '@/features/account/components/AccountBanner';
 import { AlertCard } from '@/features/alerts/components/AlertCard';
 import { formatLocation } from '@/domain/location';
 import { DecisionItem } from '@/features/automation/components/DecisionItem';
@@ -53,6 +54,7 @@ export function DashboardScreen() {
           dot
         />
       }>
+      <AccountBanner />
       <DemoBanner />
       <HealthBanner health={health} alertCount={alerts.length} clock={formatClock(now)} />
       <OutsideCard />
